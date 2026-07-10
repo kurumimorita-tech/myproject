@@ -6,8 +6,10 @@ AIが一般のお客様になりきり、裏設定（名義人の所在・現在
 ## 使い方
 
 1. `index.html` をブラウザで開く（**Google Chrome 推奨** ／ 音声入力に必要）。
-2. **Anthropic APIキー** を入力（[取得はこちら](https://console.anthropic.com/settings/keys)）。
-   - キーはブラウザ内（localStorage）にのみ保存され、Anthropic以外には送信されません。
+2. **AI提供元** を選び、**APIキー** を入力。
+   - **Google Gemini（無料・カード登録不要／推奨）**：[aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey) で無料取得
+   - **Claude（Anthropic・有料）**：[console.anthropic.com/settings/keys](https://console.anthropic.com/settings/keys) で取得（要カード登録）
+   - キーはブラウザ内（localStorage）にのみ保存され、選んだAI提供元以外には送信されません。
 3. **「▶ ロープレ開始」** を押すと、ブースで見えるお客様情報（年齢・性別／同伴者）が表示されます。
 4. **🎤マイク** または テキスト入力で営業トークを開始。お客様が**声で**返答します。
 5. うまくヒアリング＆クロージングできれば **成約**。
@@ -18,7 +20,8 @@ AIが一般のお客様になりきり、裏設定（名義人の所在・現在
 
 - 🎤 音声認識（Web Speech API, 日本語）で営業トークを入力
 - 🔊 音声合成でお客様がリアルに返答（声・自動マイクON切替あり）
-- 🧠 モデル選択（Sonnet 5 / Opus 4.8 / Haiku 4.5）
+- 🆓 AI提供元を選択（**Google Gemini＝無料・カード不要** ／ Claude＝有料）
+- 🧠 モデル選択（Gemini 2.5 Flash / 2.0 Flash / 2.5 Pro、または Sonnet 5 / Opus 4.8 / Haiku 4.5）
 - 🎭 名義人の所在パターン（本人／館内／不在）に応じた分岐展開
 - 🎓 ロープレ後のフィードバックと裏設定の答え合わせ
 

@@ -154,25 +154,22 @@
   <aside class="side">
     <div class="card" id="setupCard">
       <h2>設定</h2>
-      <div id="netHint"></div>
-      <label>Anthropic APIキー</label>
-      <input type="password" id="apiKey" placeholder="sk-ant-..." autocomplete="off" />
-      <label>お客様の頭脳（モデル）</label>
-      <select id="model">
-        <option value="claude-sonnet-5">Sonnet 5（推奨・バランス）</option>
-        <option value="claude-opus-4-8">Opus 4.8（最高品質・やや遅い）</option>
-        <option value="claude-haiku-4-5-20251001">Haiku 4.5（高速・軽量）</option>
+      <label>AI提供元</label>
+      <select id="provider">
+        <option value="gemini">Google Gemini（無料・カード不要）</option>
+        <option value="anthropic">Claude（Anthropic・有料）</option>
       </select>
+      <label id="keyLabel">Gemini APIキー</label>
+      <input type="password" id="apiKey" placeholder="AIza..." autocomplete="off" />
+      <label>お客様の頭脳（モデル）</label>
+      <select id="model"></select>
       <label>お客様の声（音声合成）</label>
       <select id="voiceSel"></select>
       <div class="toggle-row">
         <input type="checkbox" id="autoMic" checked />
         <label for="autoMic">返答後に自動でマイクON</label>
       </div>
-      <p class="hint">
-        APIキーはこのブラウザ内（localStorage）にのみ保存され、Anthropicへの通信以外には送信されません。
-        <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">キーを取得</a>
-      </p>
+      <p class="hint" id="keyHint"></p>
     </div>
 
     <div class="card">
@@ -254,6 +251,34 @@
 
   const START_TRIGGER = `ロープレを開始します。裏設定を生成し、イベントブースで最初に見えるお客様情報だけを提示してください。`;
 
+  // ---------- Providers ----------
+  const PROVIDERS = {
+    gemini: {
+      keyLabel: "Gemini APIキー",
+      placeholder: "AIza...",
+      link: "https://aistudio.google.com/app/apikey",
+      linkText: "無料でキーを取得（カード不要）",
+      note: "Google Gemini は無料枠で利用できます。APIキーはこのブラウザ内（localStorage）にのみ保存されます。",
+      models: [
+        ["gemini-2.5-flash", "Gemini 2.5 Flash（推奨・無料）"],
+        ["gemini-2.0-flash", "Gemini 2.0 Flash（高速・無料）"],
+        ["gemini-2.5-pro", "Gemini 2.5 Pro（高品質・無料枠少なめ）"]
+      ]
+    },
+    anthropic: {
+      keyLabel: "Anthropic APIキー",
+      placeholder: "sk-ant-...",
+      link: "https://console.anthropic.com/settings/keys",
+      linkText: "キーを取得（要カード登録）",
+      note: "Claude は従量課金（有料）です。APIキーはこのブラウザ内（localStorage）にのみ保存されます。",
+      models: [
+        ["claude-sonnet-5", "Sonnet 5（バランス）"],
+        ["claude-opus-4-8", "Opus 4.8（最高品質）"],
+        ["claude-haiku-4-5-20251001", "Haiku 4.5（高速）"]
+      ]
+    }
+  };
+
   // ---------- State ----------
   let messages = [];       // full API history (includes secret tags)
   let running = false;
@@ -262,11 +287,35 @@
   let secrets = [];        // collected secret texts for reveal
   const $ = (id) => document.getElementById(id);
 
-  // ---------- Persistence ----------
-  $("apiKey").value = localStorage.getItem("anthropic_key") || "";
-  $("model").value = localStorage.getItem("roleplay_model") || "claude-sonnet-5";
-  $("apiKey").addEventListener("change", () => localStorage.setItem("anthropic_key", $("apiKey").value.trim()));
-  $("model").addEventListener("change", () => localStorage.setItem("roleplay_model", $("model").value));
+  // ---------- Persistence & provider switching ----------
+  function applyProvider() {
+    const p = $("provider").value;
+    const cfg = PROVIDERS[p];
+    $("keyLabel").textContent = cfg.keyLabel;
+    $("apiKey").placeholder = cfg.placeholder;
+    $("apiKey").value = localStorage.getItem("key_" + p) || "";
+    $("keyHint").innerHTML = cfg.note +
+      ' <a href="' + cfg.link + '" target="_blank" rel="noopener">' + cfg.linkText + '</a>';
+    const sel = $("model");
+    sel.innerHTML = "";
+    cfg.models.forEach(([val, label]) => {
+      const o = document.createElement("option");
+      o.value = val; o.textContent = label;
+      sel.appendChild(o);
+    });
+    sel.value = localStorage.getItem("model_" + p) || cfg.models[0][0];
+    if (!sel.value) sel.value = cfg.models[0][0];
+  }
+  $("provider").value = localStorage.getItem("roleplay_provider") || "gemini";
+  applyProvider();
+  $("provider").addEventListener("change", () => {
+    localStorage.setItem("roleplay_provider", $("provider").value);
+    applyProvider();
+  });
+  $("apiKey").addEventListener("change", () =>
+    localStorage.setItem("key_" + $("provider").value, $("apiKey").value.trim()));
+  $("model").addEventListener("change", () =>
+    localStorage.setItem("model_" + $("provider").value, $("model").value));
 
   // ---------- Speech synthesis (TTS) ----------
   let jaVoices = [];
@@ -397,10 +446,15 @@
   }
 
   // ---------- API call ----------
-  async function callClaude() {
+  async function callAPI() {
     const key = $("apiKey").value.trim();
     if (!key) { setStatus("⚠️ APIキーを入力してください。"); return null; }
     const model = $("model").value;
+    if ($("provider").value === "anthropic") return callAnthropic(key, model);
+    return callGemini(key, model);
+  }
+
+  async function callAnthropic(key, model) {
     const resp = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -422,8 +476,40 @@
       throw new Error(err);
     }
     const data = await resp.json();
-    const text = (data.content || []).filter(c => c.type === "text").map(c => c.text).join("");
-    return text;
+    return (data.content || []).filter(c => c.type === "text").map(c => c.text).join("");
+  }
+
+  async function callGemini(key, model) {
+    const contents = messages.map(m => ({
+      role: m.role === "assistant" ? "model" : "user",
+      parts: [{ text: m.content }]
+    }));
+    const genCfg = { maxOutputTokens: 2048, temperature: 1.0 };
+    // Disable "thinking" on 2.5 models so tokens go to the actual reply.
+    if (/^gemini-2\.5/.test(model)) genCfg.thinkingConfig = { thinkingBudget: 0 };
+    const url = "https://generativelanguage.googleapis.com/v1beta/models/" +
+      encodeURIComponent(model) + ":generateContent?key=" + encodeURIComponent(key);
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
+        contents: contents,
+        generationConfig: genCfg
+      })
+    });
+    if (!resp.ok) {
+      let err = resp.status + " " + resp.statusText;
+      try { const j = await resp.json(); if (j.error && j.error.message) err = j.error.message; } catch (_) {}
+      throw new Error(err);
+    }
+    const data = await resp.json();
+    const cand = (data.candidates || [])[0];
+    if (!cand || !cand.content || !cand.content.parts) {
+      const reason = cand && cand.finishReason ? "（理由: " + cand.finishReason + "）" : "";
+      throw new Error("応答が空でした" + reason + "。もう一度お試しください。");
+    }
+    return cand.content.parts.map(p => p.text || "").join("");
   }
 
   async function turn(triggerText, isFeedback) {
@@ -431,7 +517,7 @@
     showTyping();
     setBusy(true);
     try {
-      const raw = await callClaude();
+      const raw = await callAPI();
       hideTyping();
       if (raw === null) { setBusy(false); return; }
       messages.push({ role: "assistant", content: raw });
@@ -466,7 +552,7 @@
   // ---------- Actions ----------
   async function startRoleplay() {
     if (!$("apiKey").value.trim()) { setStatus("⚠️ 先にAPIキーを入力してください。"); return; }
-    localStorage.setItem("anthropic_key", $("apiKey").value.trim());
+    localStorage.setItem("key_" + $("provider").value, $("apiKey").value.trim());
     running = true; messages = []; secrets = [];
     chat.innerHTML = ""; $("profile").innerHTML = '<div class="empty">生成中…</div>';
     $("revealBtn").disabled = true;
