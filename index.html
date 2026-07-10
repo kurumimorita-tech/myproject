@@ -498,29 +498,58 @@
     return callGemini(key, model);
   }
 
-  async function callAnthropic(key, model) {
-    const resp = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": key,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true"
-      },
-      body: JSON.stringify({
-        model: model,
-        max_tokens: 1024,
-        system: SYSTEM_PROMPT,
-        messages: messages
-      })
-    });
-    if (!resp.ok) {
-      let err = resp.status + " " + resp.statusText;
-      try { const j = await resp.json(); if (j.error && j.error.message) err = j.error.message; } catch (_) {}
-      throw new Error(err);
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+  // Treat capacity / rate errors as transient and worth retrying.
+  function isTransient(e) {
+    const s = e && e.status;
+    if ([429, 500, 502, 503, 504, 529].includes(s)) return true;
+    const m = ((e && e.message) || "").toLowerCase();
+    return /high demand|overloaded|unavailable|resource_exhausted|try again|temporarily|rate limit|internal error/.test(m);
+  }
+
+  // Retry a request with exponential backoff on transient errors.
+  async function withRetry(fn, tries) {
+    tries = tries || 4;
+    let lastErr;
+    for (let i = 0; i < tries; i++) {
+      try { return await fn(); }
+      catch (e) {
+        lastErr = e;
+        if (!isTransient(e) || i === tries - 1) throw e;
+        const wait = 1500 * Math.pow(2, i); // 1.5s, 3s, 6s …
+        setStatus("⏳ 混雑のため再試行中… (" + (i + 1) + "/" + (tries - 1) + ") " + Math.round(wait / 1000) + "秒待機");
+        await sleep(wait);
+      }
     }
-    const data = await resp.json();
-    return (data.content || []).filter(c => c.type === "text").map(c => c.text).join("");
+    throw lastErr;
+  }
+
+  async function callAnthropic(key, model) {
+    return withRetry(async () => {
+      const resp = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-api-key": key,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true"
+        },
+        body: JSON.stringify({
+          model: model,
+          max_tokens: 1024,
+          system: SYSTEM_PROMPT,
+          messages: messages
+        })
+      });
+      if (!resp.ok) {
+        let err = resp.status + " " + resp.statusText;
+        try { const j = await resp.json(); if (j.error && j.error.message) err = j.error.message; } catch (_) {}
+        const e = new Error(err); e.status = resp.status; throw e;
+      }
+      const data = await resp.json();
+      return (data.content || []).filter(c => c.type === "text").map(c => c.text).join("");
+    });
   }
 
   async function callGemini(key, model) {
@@ -533,27 +562,30 @@
     if (/^gemini-2\.5/.test(model)) genCfg.thinkingConfig = { thinkingBudget: 0 };
     const url = "https://generativelanguage.googleapis.com/v1beta/models/" +
       encodeURIComponent(model) + ":generateContent";
-    const resp = await fetch(url, {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-goog-api-key": key },
-      body: JSON.stringify({
-        system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
-        contents: contents,
-        generationConfig: genCfg
-      })
+    const body = JSON.stringify({
+      system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
+      contents: contents,
+      generationConfig: genCfg
     });
-    if (!resp.ok) {
-      let err = resp.status + " " + resp.statusText;
-      try { const j = await resp.json(); if (j.error && j.error.message) err = j.error.message; } catch (_) {}
-      throw new Error(err);
-    }
-    const data = await resp.json();
-    const cand = (data.candidates || [])[0];
-    if (!cand || !cand.content || !cand.content.parts) {
-      const reason = cand && cand.finishReason ? "（理由: " + cand.finishReason + "）" : "";
-      throw new Error("応答が空でした" + reason + "。もう一度お試しください。");
-    }
-    return cand.content.parts.map(p => p.text || "").join("");
+    return withRetry(async () => {
+      const resp = await fetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-goog-api-key": key },
+        body: body
+      });
+      if (!resp.ok) {
+        let err = resp.status + " " + resp.statusText;
+        try { const j = await resp.json(); if (j.error && j.error.message) err = j.error.message; } catch (_) {}
+        const e = new Error(err); e.status = resp.status; throw e;
+      }
+      const data = await resp.json();
+      const cand = (data.candidates || [])[0];
+      if (!cand || !cand.content || !cand.content.parts) {
+        const reason = cand && cand.finishReason ? "（理由: " + cand.finishReason + "）" : "";
+        throw new Error("応答が空でした" + reason + "。もう一度お試しください。");
+      }
+      return cand.content.parts.map(p => p.text || "").join("");
+    });
   }
 
   async function turn(triggerText, isFeedback) {
@@ -580,7 +612,11 @@
     } catch (e) {
       hideTyping();
       addBubble("system", "", "❌ エラー: " + e.message);
-      setStatus("エラーが発生しました。APIキーやネットワークをご確認ください。");
+      if (isTransient(e)) {
+        setStatus("しばらく混雑しているようです。少し待って再送するか、モデルを『Flash-Lite』に切り替える／🔄で別モデルを選ぶとつながりやすくなります。");
+      } else {
+        setStatus("エラーが発生しました。APIキーやネットワークをご確認ください。");
+      }
     } finally {
       setBusy(false);
     }
