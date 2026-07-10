@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>営業ロープレ｜通信回線 切り替え営業トレーニング</title>
+<style>
+  :root {
+    --bg: #0f1420;
+    --panel: #1a2130;
+    --panel-2: #222b3d;
+    --line: #2f3a4f;
+    --text: #e8edf5;
+    --muted: #9aa7bd;
+    --accent: #3b82f6;
+    --accent-2: #22c55e;
+    --danger: #ef4444;
+    --cust: #2b3550;
+    --sales: #1e3a2f;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN",
+      "Yu Gothic", "Meiryo", sans-serif;
+    background: linear-gradient(160deg, #0f1420, #131a29);
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+  header {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--line);
+    background: rgba(20,26,40,0.85);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  header h1 { font-size: 17px; margin: 0; font-weight: 700; letter-spacing: .02em; }
+  header .tag {
+    font-size: 11px; color: var(--muted); border: 1px solid var(--line);
+    padding: 3px 8px; border-radius: 999px;
+  }
+  .spacer { flex: 1; }
+  button {
+    font-family: inherit; cursor: pointer; border: none; border-radius: 10px;
+    font-weight: 600; transition: filter .15s, transform .05s;
+  }
+  button:active { transform: translateY(1px); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .btn-ghost {
+    background: var(--panel-2); color: var(--text); padding: 8px 14px;
+    border: 1px solid var(--line); font-size: 13px;
+  }
+  .btn-ghost:hover:not(:disabled) { filter: brightness(1.2); }
+  .btn-primary { background: var(--accent); color: #fff; padding: 10px 18px; font-size: 14px; }
+  .btn-primary:hover:not(:disabled) { filter: brightness(1.1); }
+
+  main {
+    flex: 1; display: grid; grid-template-columns: 300px 1fr;
+    gap: 16px; padding: 16px; max-width: 1200px; margin: 0 auto; width: 100%;
+  }
+  @media (max-width: 820px) { main { grid-template-columns: 1fr; } }
+
+  .side { display: flex; flex-direction: column; gap: 14px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 14px;
+  }
+  .card h2 { font-size: 13px; margin: 0 0 10px; color: var(--muted); font-weight: 700;
+    text-transform: uppercase; letter-spacing: .08em; }
+  label { font-size: 12px; color: var(--muted); display: block; margin: 8px 0 4px; }
+  input, select {
+    width: 100%; background: var(--panel-2); border: 1px solid var(--line);
+    color: var(--text); border-radius: 9px; padding: 9px 10px; font-size: 13px;
+    font-family: inherit;
+  }
+  input:focus, select:focus { outline: none; border-color: var(--accent); }
+  .hint { font-size: 11px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+  .hint a { color: var(--accent); }
+
+  .profile-card { min-height: 60px; }
+  .profile-card .empty { color: var(--muted); font-size: 13px; }
+  .profile-card ul { margin: 0; padding-left: 18px; }
+  .profile-card li { font-size: 13.5px; line-height: 1.7; }
+
+  .chat-wrap { display: flex; flex-direction: column; min-height: 0; }
+  .chat {
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+    flex: 1; padding: 16px; overflow-y: auto; display: flex; flex-direction: column;
+    gap: 12px; min-height: 340px;
+  }
+  .msg { max-width: 82%; padding: 11px 14px; border-radius: 14px; font-size: 14.5px;
+    line-height: 1.65; white-space: pre-wrap; word-break: break-word; }
+  .msg .who { font-size: 11px; color: var(--muted); margin-bottom: 4px; font-weight: 700; }
+  .msg.cust { background: var(--cust); align-self: flex-start; border-bottom-left-radius: 4px; }
+  .msg.sales { background: var(--sales); align-self: flex-end; border-bottom-right-radius: 4px; }
+  .msg.system { align-self: center; background: transparent; color: var(--muted);
+    font-size: 12.5px; text-align: center; max-width: 100%; }
+  .msg.feedback { background: #2a2340; align-self: stretch; max-width: 100%;
+    border: 1px solid #4a3f6b; }
+  .msg.secret { background: #3a2a1a; align-self: stretch; max-width: 100%;
+    border: 1px dashed #7a5a2a; }
+  .typing { align-self: flex-start; color: var(--muted); font-size: 13px; padding: 6px 4px; }
+  .dots span { animation: blink 1.2s infinite; }
+  .dots span:nth-child(2){ animation-delay:.2s } .dots span:nth-child(3){ animation-delay:.4s }
+  @keyframes blink { 0%,60%,100%{opacity:.25} 30%{opacity:1} }
+
+  .composer {
+    margin-top: 12px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 12px; display: flex; gap: 10px; align-items: center;
+  }
+  .mic {
+    width: 58px; height: 58px; border-radius: 50%; background: var(--accent);
+    color: #fff; font-size: 22px; flex-shrink: 0; display: flex; align-items: center;
+    justify-content: center; position: relative;
+  }
+  .mic.rec { background: var(--danger); animation: pulse 1.3s infinite; }
+  @keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(239,68,68,.5)} 70%{box-shadow:0 0 0 14px rgba(239,68,68,0)} 100%{box-shadow:0 0 0 0 rgba(239,68,68,0)} }
+  .composer textarea {
+    flex: 1; background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+    border-radius: 10px; padding: 10px; font-size: 14px; font-family: inherit; resize: none;
+    height: 52px; line-height: 1.4;
+  }
+  .composer textarea:focus { outline: none; border-color: var(--accent); }
+  .send { background: var(--accent-2); color: #fff; padding: 0 18px; height: 52px; font-size: 14px; }
+
+  .status { font-size: 12px; color: var(--muted); margin-top: 8px; min-height: 16px; text-align: center; }
+  .toolbar { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .toggle-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+  .toggle-row input { width: auto; }
+  .toggle-row label { margin: 0; font-size: 12.5px; color: var(--text); }
+  .banner {
+    background: #3a2118; border: 1px solid #7a4a2a; color: #ffd9c0; padding: 10px 12px;
+    border-radius: 10px; font-size: 12.5px; line-height: 1.5; margin-bottom: 12px;
+  }
+  code { background: rgba(255,255,255,.08); padding: 1px 5px; border-radius: 5px; font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🎧 通信回線 切り替え営業ロープレ</h1>
+  <span class="tag">音声対話トレーニング</span>
+  <div class="spacer"></div>
+  <button class="btn-ghost" id="revealBtn" disabled>🔍 裏設定を見る</button>
+  <button class="btn-ghost" id="resetBtn">↺ リセット</button>
+</header>
+
+<main>
+  <aside class="side">
+    <div class="card" id="setupCard">
+      <h2>設定</h2>
+      <div id="netHint"></div>
+      <label>Anthropic APIキー</label>
+      <input type="password" id="apiKey" placeholder="sk-ant-..." autocomplete="off" />
+      <label>お客様の頭脳（モデル）</label>
+      <select id="model">
+        <option value="claude-sonnet-5">Sonnet 5（推奨・バランス）</option>
+        <option value="claude-opus-4-8">Opus 4.8（最高品質・やや遅い）</option>
+        <option value="claude-haiku-4-5-20251001">Haiku 4.5（高速・軽量）</option>
+      </select>
+      <label>お客様の声（音声合成）</label>
+      <select id="voiceSel"></select>
+      <div class="toggle-row">
+        <input type="checkbox" id="autoMic" checked />
+        <label for="autoMic">返答後に自動でマイクON</label>
+      </div>
+      <p class="hint">
+        APIキーはこのブラウザ内（localStorage）にのみ保存され、Anthropicへの通信以外には送信されません。
+        <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">キーを取得</a>
+      </p>
+    </div>
+
+    <div class="card">
+      <h2>お客様プロフィール</h2>
+      <div class="profile-card" id="profile">
+        <div class="empty">「ロープレ開始」を押すと、イベントブースで見えるお客様情報が表示されます。</div>
+      </div>
+      <button class="btn-primary" id="startBtn" style="width:100%;margin-top:12px">▶ ロープレ開始</button>
+    </div>
+  </aside>
+
+  <section class="chat-wrap">
+    <div class="banner" id="micBanner" style="display:none"></div>
+    <div class="chat" id="chat"></div>
+    <div class="composer">
+      <button class="mic" id="micBtn" title="押して話す" disabled>🎤</button>
+      <textarea id="text" placeholder="ここに営業トークを入力、またはマイクで話しかけてください…" disabled></textarea>
+      <button class="send btn-primary" id="sendBtn" disabled>送信</button>
+    </div>
+    <div class="status" id="status"></div>
+    <div class="toolbar">
+      <button class="btn-ghost" id="endBtn" disabled>🏁 ロープレ終了してフィードバックをもらう</button>
+      <button class="btn-ghost" id="stopSpeakBtn">🔇 読み上げ停止</button>
+    </div>
+  </section>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---------- Roleplay system prompt ----------
+  const SYSTEM_PROMPT = `# あなたの役割
+あなたは通信回線（携帯・ネット・電気）の切り替え営業を受ける一般のお客様です。
+ユーザーは新人営業マンで、あなたに営業を行います。
+実際のお客様のようにリアルに感情や反応を表現し、実践的なロープレの相手をしてください。
+これは音声で行う対話です。1回の返答は自然な会話として短め（多くても2〜4文程度）にし、実際に人が声に出して話すような口語で話してください。
+
+# 裏設定（※ユーザーには絶対に自分から明かさない）
+最初のターンで、以下をランダムに1つずつ決定し、\`<secret>\`〜\`</secret>\`タグの中に記録してください。このタグの中身はお客様の発言としては読み上げられず、ユーザーにも見えません。一度決めた設定は会話を通じて必ず一貫させてください。
+- 名義人/決裁者の所在（A〜Cからランダム）
+  - パターンA：目の前の本人が名義人/決裁者
+  - パターンB：名義人は別だが、同じ館内（別フロアや別の店）にいる
+  - パターンC：名義人は別で、今日はここに来ていない（仕事中・家で休み等）
+- 現在の携帯キャリア／ネット回線／電力会社
+- 家族構成とそれぞれの利用状況
+- 現在の月額料金の合計（大まかな金額）
+- 現在の利用理由（例：昔からなんとなく、家族割があるから 等）
+- 隠れたニーズ（これが満たされたら成約。例：安くなるなら変えたいが手続きが面倒、実は通信速度に不満 等）
+- 最初のアウト返し（例：今のままで困ってない、変えるのが面倒、時間がない 等）
+
+# 会話の絶対ルール
+- AIであることを明かさず、完全にお客様になりきる。
+- 質問には答えるが、自分から「隠れたニーズ」や「名義人の所在」をペラペラ語らない。ユーザーのヒアリング力で少しずつ引き出されるようにする。
+- ユーザーのトークが強引だったり、メリットを感じない場合は明確に断り、すぐには納得しない。
+- ユーザーが「マイドコモを見せて」「スマホ画面を見せて」など視覚確認を求めたら、設定に合わせて「はい、こんな感じです。月に動画を50GBくらい使ってるみたいです」等、具体的な利用状況を口頭で答えて会話を続ける。
+
+# 名義人・決裁者に関する特殊ルール
+- パターンB（館内にいる）：ヒアリングされるまで自ら言わない。興味付けに成功し「話を聞く価値がある」と深く納得した場合のみ、「じゃあ、あっちの店にいる夫（妻）を呼んできますね」と連れてくる展開に。
+- パターンC（館内にいない）：その場での最終手続きは不可。クロージングの刺さり具合で分岐。
+  - 大成功：名義人に今すぐ電話してブースに来てもらう／すぐ家に取りに帰って連れてくる。
+  - 成功：「後日、本人がいる時にまた来ます」と再来店を約束。
+  - 失敗：「家で聞いてみますね（チラシだけもらっておきます）」とあしらい、実質お断り（失注）へ。
+
+# 成約条件
+ユーザーが隠れたニーズを見抜き、的確なクロージングを行い、あなたが心から納得し、かつ名義人/決裁者の問題がクリアになった場合のみ「成約」。成約したら、発言の最後に \`<closed>成約</closed>\` を付けてください。
+
+# 出力フォーマット
+- 最初のターンのみ：まず\`<secret>...</secret>\`で全裏設定を記録し、続けて\`<profile>\`〜\`</profile>\`の中に「イベントブースで最初に見えるお客様情報」だけを箇条書きで書く（年齢・性別／何人で・誰と来ているか の2項目のみ。裏設定は書かない）。profileの後に「それでは、営業マン側からトークをスタートしてください」と促す。
+- 2ターン目以降：\`<secret>\`や\`<profile>\`は不要。お客様としての自然なセリフだけを返す。設定を思い出す必要があればごく短い\`<secret>\`メモを付けてよい（読み上げ・表示されない）。
+- \`<feedback>\`タグは、ユーザーが「フィードバック」を求めた時のみ使用。`;
+
+  const FEEDBACK_TRIGGER = `【ロープレ終了】ここまでのロープレを踏まえ、営業指導者の視点で私（営業マン）のトークをフィードバックしてください。次の形式で、\`<feedback>\`〜\`</feedback>\`タグの中に書いてください：
+① 良かった点（具体的に2〜3個）
+② 改善点（具体的に2〜3個、次にどう言えばよかったかの例文付き）
+③ 今回の裏設定の答え合わせ（名義人の所在・隠れたニーズ・現在の契約状況など）
+④ 総合評価（成約 / 惜しい / 失注、と一言コメント）
+これはフィードバックなので、お客様としてではなく指導者として書いてください。`;
+
+  const START_TRIGGER = `ロープレを開始します。裏設定を生成し、イベントブースで最初に見えるお客様情報だけを提示してください。`;
+
+  // ---------- State ----------
+  let messages = [];       // full API history (includes secret tags)
+  let running = false;
+  let recognizing = false;
+  let recognition = null;
+  let secrets = [];        // collected secret texts for reveal
+  const $ = (id) => document.getElementById(id);
+
+  // ---------- Persistence ----------
+  $("apiKey").value = localStorage.getItem("anthropic_key") || "";
+  $("model").value = localStorage.getItem("roleplay_model") || "claude-sonnet-5";
+  $("apiKey").addEventListener("change", () => localStorage.setItem("anthropic_key", $("apiKey").value.trim()));
+  $("model").addEventListener("change", () => localStorage.setItem("roleplay_model", $("model").value));
+
+  // ---------- Speech synthesis (TTS) ----------
+  let jaVoices = [];
+  function loadVoices() {
+    const all = speechSynthesis.getVoices();
+    jaVoices = all.filter(v => v.lang && v.lang.toLowerCase().startsWith("ja"));
+    const sel = $("voiceSel");
+    sel.innerHTML = "";
+    if (jaVoices.length === 0) {
+      const o = document.createElement("option");
+      o.textContent = "（日本語音声が見つかりません）";
+      sel.appendChild(o);
+    } else {
+      jaVoices.forEach((v, i) => {
+        const o = document.createElement("option");
+        o.value = i; o.textContent = v.name;
+        sel.appendChild(o);
+      });
+    }
+  }
+  loadVoices();
+  if (typeof speechSynthesis !== "undefined") speechSynthesis.onvoiceschanged = loadVoices;
+
+  function speak(text) {
+    if (!("speechSynthesis" in window) || !text.trim()) return;
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = "ja-JP";
+    const idx = parseInt($("voiceSel").value, 10);
+    if (jaVoices[idx]) u.voice = jaVoices[idx];
+    u.rate = 1.02; u.pitch = 1.0;
+    u.onend = () => { if (running && $("autoMic").checked) startRecognition(); };
+    speechSynthesis.speak(u);
+  }
+  $("stopSpeakBtn").addEventListener("click", () => speechSynthesis.cancel());
+
+  // ---------- Speech recognition (STT) ----------
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (SR) {
+    recognition = new SR();
+    recognition.lang = "ja-JP";
+    recognition.interimResults = true;
+    recognition.continuous = false;
+    let finalText = "";
+    recognition.onstart = () => { recognizing = true; $("micBtn").classList.add("rec"); setStatus("🎤 聞いています… もう一度押すと停止"); finalText = ""; };
+    recognition.onresult = (e) => {
+      let interim = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const t = e.results[i][0].transcript;
+        if (e.results[i].isFinal) finalText += t; else interim += t;
+      }
+      $("text").value = (finalText + interim).trim();
+    };
+    recognition.onerror = (e) => { setStatus("音声認識エラー: " + e.error); };
+    recognition.onend = () => {
+      recognizing = false; $("micBtn").classList.remove("rec");
+      const val = $("text").value.trim();
+      if (val) { setStatus(""); sendMessage(val); }
+      else setStatus("");
+    };
+  } else {
+    $("micBanner").style.display = "block";
+    $("micBanner").textContent = "⚠️ このブラウザは音声入力（音声認識）に対応していません。Google Chrome を推奨します。テキスト入力は利用できます。";
+  }
+
+  function startRecognition() {
+    if (!recognition || recognizing || !running) return;
+    speechSynthesis.cancel();
+    try { recognition.start(); } catch (_) {}
+  }
+  function toggleMic() {
+    if (!recognition) return;
+    if (recognizing) recognition.stop();
+    else startRecognition();
+  }
+  $("micBtn").addEventListener("click", toggleMic);
+
+  // ---------- UI helpers ----------
+  function setStatus(s) { $("status").textContent = s; }
+  const chat = $("chat");
+  function addBubble(cls, who, text) {
+    const d = document.createElement("div");
+    d.className = "msg " + cls;
+    if (who) { const w = document.createElement("div"); w.className = "who"; w.textContent = who; d.appendChild(w); }
+    const body = document.createElement("div"); body.textContent = text; d.appendChild(body);
+    chat.appendChild(d); chat.scrollTop = chat.scrollHeight;
+    return d;
+  }
+  function showTyping() {
+    const d = document.createElement("div");
+    d.className = "typing"; d.id = "typing";
+    d.innerHTML = 'お客様が考えています <span class="dots"><span>●</span><span>●</span><span>●</span></span>';
+    chat.appendChild(d); chat.scrollTop = chat.scrollHeight;
+  }
+  function hideTyping() { const t = $("typing"); if (t) t.remove(); }
+
+  // Parse assistant raw text into spoken/visible parts + extract tags
+  function parseAssistant(raw) {
+    let spoken = raw;
+    // extract secrets
+    const secRe = /<secret>([\s\S]*?)<\/secret>/gi;
+    let m; while ((m = secRe.exec(raw)) !== null) { if (m[1].trim()) secrets.push(m[1].trim()); }
+    spoken = spoken.replace(secRe, "");
+    // extract profile
+    let profile = null;
+    const pm = /<profile>([\s\S]*?)<\/profile>/i.exec(raw);
+    if (pm) { profile = pm[1].trim(); spoken = spoken.replace(pm[0], ""); }
+    // feedback
+    let feedback = null;
+    const fm = /<feedback>([\s\S]*?)<\/feedback>/i.exec(raw);
+    if (fm) { feedback = fm[1].trim(); spoken = spoken.replace(fm[0], ""); }
+    // closed
+    const closed = /<closed>[\s\S]*?<\/closed>/i.test(raw);
+    spoken = spoken.replace(/<closed>[\s\S]*?<\/closed>/gi, "");
+    spoken = spoken.replace(/<\/?[a-z]+>/gi, "").trim();
+    return { spoken, profile, feedback, closed };
+  }
+
+  function renderProfile(text) {
+    const el = $("profile");
+    el.innerHTML = "";
+    const ul = document.createElement("ul");
+    text.split(/\n+/).forEach(line => {
+      const t = line.replace(/^[\*\-・•]\s*/, "").trim();
+      if (t) { const li = document.createElement("li"); li.textContent = t; ul.appendChild(li); }
+    });
+    el.appendChild(ul);
+  }
+
+  // ---------- API call ----------
+  async function callClaude() {
+    const key = $("apiKey").value.trim();
+    if (!key) { setStatus("⚠️ APIキーを入力してください。"); return null; }
+    const model = $("model").value;
+    const resp = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": key,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
+      body: JSON.stringify({
+        model: model,
+        max_tokens: 1024,
+        system: SYSTEM_PROMPT,
+        messages: messages
+      })
+    });
+    if (!resp.ok) {
+      let err = resp.status + " " + resp.statusText;
+      try { const j = await resp.json(); if (j.error && j.error.message) err = j.error.message; } catch (_) {}
+      throw new Error(err);
+    }
+    const data = await resp.json();
+    const text = (data.content || []).filter(c => c.type === "text").map(c => c.text).join("");
+    return text;
+  }
+
+  async function turn(triggerText, isFeedback) {
+    messages.push({ role: "user", content: triggerText });
+    showTyping();
+    setBusy(true);
+    try {
+      const raw = await callClaude();
+      hideTyping();
+      if (raw === null) { setBusy(false); return; }
+      messages.push({ role: "assistant", content: raw });
+      const { spoken, profile, feedback, closed } = parseAssistant(raw);
+      if (profile) renderProfile(profile);
+      if (secrets.length) $("revealBtn").disabled = false;
+      if (feedback) {
+        addBubble("feedback", "🎓 指導者フィードバック", feedback);
+      } else if (spoken) {
+        addBubble("cust", "🧑 お客様", spoken);
+        speak(spoken);
+      }
+      if (closed) {
+        addBubble("system", "", "🎉 成約！ お疲れさまでした。「フィードバックをもらう」で振り返りができます。");
+      }
+    } catch (e) {
+      hideTyping();
+      addBubble("system", "", "❌ エラー: " + e.message);
+      setStatus("エラーが発生しました。APIキーやネットワークをご確認ください。");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function setBusy(b) {
+    $("sendBtn").disabled = b || !running;
+    $("micBtn").disabled = b || !running || !recognition;
+    $("text").disabled = b || !running;
+    $("startBtn").disabled = b;
+  }
+
+  // ---------- Actions ----------
+  async function startRoleplay() {
+    if (!$("apiKey").value.trim()) { setStatus("⚠️ 先にAPIキーを入力してください。"); return; }
+    localStorage.setItem("anthropic_key", $("apiKey").value.trim());
+    running = true; messages = []; secrets = [];
+    chat.innerHTML = ""; $("profile").innerHTML = '<div class="empty">生成中…</div>';
+    $("revealBtn").disabled = true;
+    $("text").disabled = false; $("sendBtn").disabled = false; $("endBtn").disabled = false;
+    if (recognition) $("micBtn").disabled = false;
+    $("startBtn").textContent = "▶ 最初からやり直す";
+    addBubble("system", "", "イベントブースの前。お客様がブースに近づいてきました。");
+    await turn(START_TRIGGER, false);
+    setStatus("営業マン側からトークをスタートしてください（マイク🎤 または テキスト入力）。");
+  }
+
+  function sendMessage(text) {
+    const val = (text || $("text").value).trim();
+    if (!val || !running) return;
+    addBubble("sales", "🧑‍💼 あなた（営業）", val);
+    $("text").value = "";
+    turn(val, false);
+  }
+
+  $("startBtn").addEventListener("click", startRoleplay);
+  $("sendBtn").addEventListener("click", () => sendMessage());
+  $("text").addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  });
+  $("endBtn").addEventListener("click", () => {
+    if (!running) return;
+    speechSynthesis.cancel();
+    turn(FEEDBACK_TRIGGER, true);
+  });
+  $("revealBtn").addEventListener("click", () => {
+    if (!secrets.length) return;
+    addBubble("secret", "🔍 裏設定（答え合わせ）", secrets.join("\n\n"));
+  });
+  $("resetBtn").addEventListener("click", () => {
+    running = false; messages = []; secrets = [];
+    speechSynthesis.cancel();
+    chat.innerHTML = ""; $("profile").innerHTML = '<div class="empty">「ロープレ開始」を押すと、イベントブースで見えるお客様情報が表示されます。</div>';
+    $("text").disabled = true; $("sendBtn").disabled = true; $("micBtn").disabled = true;
+    $("endBtn").disabled = true; $("revealBtn").disabled = true;
+    $("startBtn").textContent = "▶ ロープレ開始";
+    setStatus("");
+  });
+
+  // ---------- Init ----------
+  if (!recognition) {} // banner already shown
+})();
+</script>
+</body>
+</html>
