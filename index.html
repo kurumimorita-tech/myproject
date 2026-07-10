@@ -552,11 +552,8 @@
     });
   }
 
-  async function callGemini(key, model) {
-    const contents = messages.map(m => ({
-      role: m.role === "assistant" ? "model" : "user",
-      parts: [{ text: m.content }]
-    }));
+  // Single request to one Gemini model.
+  async function geminiRequest(key, model, contents) {
     const genCfg = { maxOutputTokens: 4096, temperature: 1.0 };
     // Disable "thinking" on 2.5 models so tokens go to the actual reply.
     if (/^gemini-2\.5/.test(model)) genCfg.thinkingConfig = { thinkingBudget: 0 };
@@ -567,25 +564,48 @@
       contents: contents,
       generationConfig: genCfg
     });
-    return withRetry(async () => {
-      const resp = await fetch(url, {
-        method: "POST",
-        headers: { "content-type": "application/json", "x-goog-api-key": key },
-        body: body
-      });
-      if (!resp.ok) {
-        let err = resp.status + " " + resp.statusText;
-        try { const j = await resp.json(); if (j.error && j.error.message) err = j.error.message; } catch (_) {}
-        const e = new Error(err); e.status = resp.status; throw e;
-      }
-      const data = await resp.json();
-      const cand = (data.candidates || [])[0];
-      if (!cand || !cand.content || !cand.content.parts) {
-        const reason = cand && cand.finishReason ? "（理由: " + cand.finishReason + "）" : "";
-        throw new Error("応答が空でした" + reason + "。もう一度お試しください。");
-      }
-      return cand.content.parts.map(p => p.text || "").join("");
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-goog-api-key": key },
+      body: body
     });
+    if (!resp.ok) {
+      let err = resp.status + " " + resp.statusText;
+      try { const j = await resp.json(); if (j.error && j.error.message) err = j.error.message; } catch (_) {}
+      const e = new Error(err); e.status = resp.status; throw e;
+    }
+    const data = await resp.json();
+    const cand = (data.candidates || [])[0];
+    if (!cand || !cand.content || !cand.content.parts) {
+      const reason = cand && cand.finishReason ? "（理由: " + cand.finishReason + "）" : "";
+      throw new Error("応答が空でした" + reason + "。もう一度お試しください。");
+    }
+    return cand.content.parts.map(p => p.text || "").join("");
+  }
+
+  async function callGemini(key, model) {
+    const contents = messages.map(m => ({
+      role: m.role === "assistant" ? "model" : "user",
+      parts: [{ text: m.content }]
+    }));
+    // If the chosen model is overloaded, fall back to lighter / less-busy ones.
+    const FALLBACKS = ["gemini-flash-lite-latest", "gemini-flash-latest", "gemini-2.5-flash-lite", "gemini-pro-latest"];
+    const seen = {};
+    const candidates = [model].concat(FALLBACKS).filter(m => (seen[m] ? false : (seen[m] = 1, true)));
+    let lastErr;
+    for (let ci = 0; ci < candidates.length; ci++) {
+      const cur = candidates[ci];
+      try {
+        const text = await withRetry(() => geminiRequest(key, cur, contents), 2);
+        if (ci > 0) setStatus("⚠️ 選択モデルが混雑のため『" + cur + "』で応答しました。");
+        return text;
+      } catch (e) {
+        lastErr = e;
+        if (!isTransient(e)) throw e; // e.g. invalid key -> stop immediately
+        if (ci < candidates.length - 1) setStatus("『" + cur + "』が混雑中… 別モデルを試しています…");
+      }
+    }
+    throw lastErr;
   }
 
   async function turn(triggerText, isFeedback) {
@@ -613,7 +633,7 @@
       hideTyping();
       addBubble("system", "", "❌ エラー: " + e.message);
       if (isTransient(e)) {
-        setStatus("しばらく混雑しているようです。少し待って再送するか、モデルを『Flash-Lite』に切り替える／🔄で別モデルを選ぶとつながりやすくなります。");
+        setStatus("複数のモデルを試しましたが、いずれも混雑中のようです。少し時間を置いてから、もう一度お試しください（🔄で空いているモデルを選ぶ手もあります）。");
       } else {
         setStatus("エラーが発生しました。APIキーやネットワークをご確認ください。");
       }
