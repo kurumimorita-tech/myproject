@@ -162,7 +162,10 @@
       <label id="keyLabel">Gemini APIキー</label>
       <input type="password" id="apiKey" placeholder="AIza..." autocomplete="off" />
       <label>お客様の頭脳（モデル）</label>
-      <select id="model"></select>
+      <div style="display:flex;gap:6px">
+        <select id="model" style="flex:1"></select>
+        <button type="button" class="btn-ghost" id="refreshModels" title="このキーで使えるモデル一覧を取得" style="padding:8px 11px">🔄</button>
+      </div>
       <label>お客様の声（音声合成）</label>
       <select id="voiceSel"></select>
       <div class="toggle-row">
@@ -260,9 +263,9 @@
       linkText: "無料でキーを取得（カード不要）",
       note: "Google Gemini は無料枠で利用できます（キーは AIza… でも AQ… でもOK）。APIキーはこのブラウザ内（localStorage）にのみ保存されます。",
       models: [
-        ["gemini-2.5-flash", "Gemini 2.5 Flash（推奨・無料）"],
-        ["gemini-2.0-flash", "Gemini 2.0 Flash（高速・無料）"],
-        ["gemini-2.5-pro", "Gemini 2.5 Pro（高品質・無料枠少なめ）"]
+        ["gemini-flash-latest", "Gemini Flash（最新・推奨・無料）"],
+        ["gemini-flash-lite-latest", "Gemini Flash-Lite（高速・無料）"],
+        ["gemini-pro-latest", "Gemini Pro（高品質）"]
       ]
     },
     anthropic: {
@@ -305,7 +308,48 @@
     });
     sel.value = localStorage.getItem("model_" + p) || cfg.models[0][0];
     if (!sel.value) sel.value = cfg.models[0][0];
+    $("refreshModels").style.display = (p === "gemini") ? "" : "none";
   }
+
+  async function fetchGeminiModels() {
+    const key = $("apiKey").value.trim();
+    if (!key) { setStatus("⚠️ 先にAPIキーを入力してください。"); return; }
+    setStatus("利用可能なモデルを取得中…");
+    try {
+      const resp = await fetch("https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000", {
+        headers: { "x-goog-api-key": key }
+      });
+      if (!resp.ok) {
+        let err = resp.status + " " + resp.statusText;
+        try { const j = await resp.json(); if (j.error && j.error.message) err = j.error.message; } catch (_) {}
+        throw new Error(err);
+      }
+      const data = await resp.json();
+      const list = (data.models || []).filter(m =>
+        (m.supportedGenerationMethods || []).includes("generateContent") &&
+        /gemini/i.test(m.name) && !/embedding|aqa/i.test(m.name));
+      if (!list.length) { setStatus("生成対応モデルが見つかりませんでした。"); return; }
+      const sel = $("model");
+      const prev = sel.value;
+      sel.innerHTML = "";
+      list.forEach(m => {
+        const id = m.name.replace(/^models\//, "");
+        const o = document.createElement("option");
+        o.value = id;
+        o.textContent = m.displayName ? (m.displayName + "（" + id + "）") : id;
+        sel.appendChild(o);
+      });
+      const ids = list.map(m => m.name.replace(/^models\//, ""));
+      const flash = ids.find(id => /flash/i.test(id) && !/lite|preview/i.test(id)) ||
+                    ids.find(id => /flash/i.test(id)) || ids[0];
+      sel.value = ids.indexOf(prev) >= 0 ? prev : flash;
+      localStorage.setItem("model_gemini", sel.value);
+      setStatus("✅ モデル一覧を更新しました（" + list.length + "件）。");
+    } catch (e) {
+      setStatus("モデル取得エラー: " + e.message);
+    }
+  }
+  document.getElementById("refreshModels").addEventListener("click", fetchGeminiModels);
   $("provider").value = localStorage.getItem("roleplay_provider") || "gemini";
   applyProvider();
   $("provider").addEventListener("change", () => {
@@ -484,7 +528,7 @@
       role: m.role === "assistant" ? "model" : "user",
       parts: [{ text: m.content }]
     }));
-    const genCfg = { maxOutputTokens: 2048, temperature: 1.0 };
+    const genCfg = { maxOutputTokens: 4096, temperature: 1.0 };
     // Disable "thinking" on 2.5 models so tokens go to the actual reply.
     if (/^gemini-2\.5/.test(model)) genCfg.thinkingConfig = { thinkingBudget: 0 };
     const url = "https://generativelanguage.googleapis.com/v1beta/models/" +
