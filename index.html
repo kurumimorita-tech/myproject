@@ -255,10 +255,10 @@
   const PROVIDERS = {
     gemini: {
       keyLabel: "Gemini APIキー",
-      placeholder: "AIza...",
+      placeholder: "AIza... または AQ...",
       link: "https://aistudio.google.com/app/apikey",
       linkText: "無料でキーを取得（カード不要）",
-      note: "Google Gemini は無料枠で利用できます。APIキーはこのブラウザ内（localStorage）にのみ保存されます。",
+      note: "Google Gemini は無料枠で利用できます（キーは AIza… でも AQ… でもOK）。APIキーはこのブラウザ内（localStorage）にのみ保存されます。",
       models: [
         ["gemini-2.5-flash", "Gemini 2.5 Flash（推奨・無料）"],
         ["gemini-2.0-flash", "Gemini 2.0 Flash（高速・無料）"],
@@ -488,10 +488,10 @@
     // Disable "thinking" on 2.5 models so tokens go to the actual reply.
     if (/^gemini-2\.5/.test(model)) genCfg.thinkingConfig = { thinkingBudget: 0 };
     const url = "https://generativelanguage.googleapis.com/v1beta/models/" +
-      encodeURIComponent(model) + ":generateContent?key=" + encodeURIComponent(key);
+      encodeURIComponent(model) + ":generateContent";
     const resp = await fetch(url, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", "x-goog-api-key": key },
       body: JSON.stringify({
         system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
         contents: contents,
