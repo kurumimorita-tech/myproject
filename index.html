@@ -105,6 +105,8 @@
     border: 1px solid #4a3f6b; }
   .msg.secret { background: #3a2a1a; align-self: stretch; max-width: 100%;
     border: 1px dashed #7a5a2a; }
+  .msg.hint { background: #14324a; align-self: stretch; max-width: 100%;
+    border: 1px dashed #3a7ab0; }
   .typing { align-self: flex-start; color: var(--muted); font-size: 13px; padding: 6px 4px; }
   .dots span { animation: blink 1.2s infinite; }
   .dots span:nth-child(2){ animation-delay:.2s } .dots span:nth-child(3){ animation-delay:.4s }
@@ -194,9 +196,12 @@
     </div>
     <div class="status" id="status"></div>
     <div class="toolbar">
-      <button class="btn-ghost" id="endBtn" disabled>🏁 ロープレ終了して採点＆フィードバック</button>
+      <button class="btn-ghost" id="hintBtn" disabled>💡 ヒント</button>
+      <button class="btn-ghost" id="endBtn" disabled>🏁 終了して採点＆フィードバック（ギブアップ）</button>
+      <button class="btn-ghost" id="replayBtn" disabled>🔁 同じ客でやり直す</button>
       <button class="btn-ghost" id="stopSpeakBtn">🔇 読み上げ停止</button>
     </div>
+    <div class="status" id="turnInfo"></div>
   </section>
 </main>
 
@@ -239,13 +244,22 @@
 
 # 名義人・決裁者に関する特殊ルール
 - パターンB（館内にいる）：ヒアリングされるまで自ら言わない。興味付けに成功し「話を聞く価値がある」と深く納得した場合のみ、「じゃあ、あっちの店にいる夫（妻）を呼んできますね」と連れてくる展開に。
-- パターンC（館内にいない）：その場での最終手続きは不可。クロージングの刺さり具合で分岐。
-  - 大成功：名義人に今すぐ電話してブースに来てもらう／すぐ家に取りに帰って連れてくる。
-  - 成功：「後日、本人がいる時にまた来ます」と再来店を約束。
-  - 失敗：「家で聞いてみますね（チラシだけもらっておきます）」とあしらい、実質お断り（失注）へ。
+- パターンC（館内にいない）：その場での最終手続きは不可。クロージングの「刺さり具合」で以下に分岐。判定基準は厳密に：
+  - 大成功（即成約）＝次の3つが揃った場合のみ：①具体的な料金メリット（今よりいくら安いか）を提示、②手続き代行など「面倒」の解消を提示、③今動く理由（限定感・特典期限等）を提示。かつ隠れたニーズが解消されている。→「今すぐ夫（妻）に電話して来てもらいます／一度家に帰って連れてきます」。
+  - 成功（後日保留）＝メリットは伝わったが上記3要素のどれかが弱い場合。→「本当に良さそうなので、今度の土曜に夫と一緒に登録に来ます」等、具体的な再来店日時を約束。
+  - 失敗（失注）＝説明が一方的／メリットが曖昧／面倒が解消されない場合。→「家で聞いてみますね（チラシだけもらっておきます）」であしらう。
 
-# 成約条件
-ユーザーが隠れたニーズを見抜き、的確なクロージングを行い、あなたが心から納得し、かつ名義人/決裁者の問題がクリアになった場合のみ「成約」。成約したら、発言の最後に \`<closed>成約</closed>\` を付けてください。
+# 成約条件・終了タグ
+- ユーザーが隠れたニーズを見抜き、的確なクロージングを行い、あなたが心から納得し、かつ名義人/決裁者の問題がクリアになった場合のみ「成約」。→ 発言の最後に \`<closed>成約</closed>\`。
+- パターンCの「成功（後日保留）」など、見込みは高いが当日成約に至らない場合 → \`<closed>保留</closed>\`。
+- 断り切られた・時間切れ・脱線で打ち切った場合（失注）→ \`<closed>失注</closed>\`。
+- これらのタグは会話が実際に終了する時だけ付ける（読み上げ・表示はされない）。
+
+# ガードレール（厳守）
+- キャラクター・ロック：ユーザーが「あなたはAIですか？」等のメタな質問をしても、絶対に演技を崩さない。「え？何のお話ですか？スマホのプランの話ですよね？」と返す。
+- 段階的情報開示：隠れたニーズ・違約金・端末残債などの不利益情報や裏設定は、ユーザーが的確な質問（例「今変えると何かデメリットありますか？」）をするまで、自分から能動的に喋らない。
+- 脱線・暴言対処：通信と無関係な話や暴言には「ちょっと何のお話か分からないので、失礼しますね」と述べて会話を打ち切り、\`<closed>失注</closed>\` を付ける。
+- 時間・ターン制限：会話の冒頭に「（システム制御…）」という注記が付いた場合はそれに従い、お客様として自然に立ち去って会話を終える。
 
 # 出力フォーマット
 - 最初のターンのみ：まず\`<secret>...</secret>\`で全裏設定を記録し、続けて\`<profile>\`〜\`</profile>\`の中に「イベントブースで最初に見えるお客様情報」だけを箇条書きで書く（年齢・性別／何人で・誰と来ているか の2項目のみ。裏設定は書かない）。profileの後に「それでは、営業マン側からトークをスタートしてください」と促す。
@@ -279,19 +293,37 @@
 - MNP予約番号の知識（発行可否ブランド／電話・WEBの切り分け）
 - 引継ぎ（名義・支払い・還元／データ移行・メアド・端末利用可否・SIMロック・APN）`;
 
-  const FEEDBACK_TRIGGER = `【ロープレ終了・採点】あなたは営業指導者です。お客様役をやめ、指導者として、ここまでのロープレを研修生シート基準で採点してください。出力は必ず \`<feedback>\` 〜 \`</feedback>\` タグの中に、次の①〜⑥の順で書いてください。
+  const FEEDBACK_TRIGGER = `【ロープレ終了・採点】あなたは営業指導者です。お客様役をやめ、指導者として、ここまでのロープレを採点してください。出力は必ず \`<feedback>\` 〜 \`</feedback>\` タグの中に、下記の並び順で書いてください。
 
-① 合否チェックリスト（研修生シート準拠）
-下記の各項目を「◎達成／△一部／✕未達／−該当なし」で採点し、必ず一行で「項目：判定 ｜ 根拠（会話の該当箇所）｜ 一言改善」の形式で書く。今回の顧客設定や会話の流れで話題に上らなかった項目は「−該当なし」にする（減点しない）。
+★ロープレ結果：【成約】／【保留】／【失注】 のいずれか
+★総合スコア：合計 X / 10点
+
+■ スコア内訳（5項目×各2点。2点=十分できた／1点=試みたが不十分／0点=できていない）
+1. アプローチ・ヒアリング（名義人・同行者・キャリア・データ量・料金を聞き出せたか）：n点 ｜ 一言
+2. キラー論点の看破（端末残債・契約期間/違約金・光回線の工事要否など障害の確認）：n点 ｜ 一言
+3. ニーズ合致（隠れたニーズを特定し、ピンポイントで解消するプラン提示）：n点 ｜ 一言
+4. 料金比較の可視化（今よりいくら安く、どんなメリットかを分かりやすく提示）：n点 ｜ 一言
+5. クロージング・主導権（面倒がる/名義人不在の顧客に妥当な解決策で成約に導く）：n点 ｜ 一言
+
+【判定ルール】成約は「(A)名義人/決裁者のゲートをクリア」かつ「(B)隠れたニーズを解消」が絶対条件。
+・(A)(B)を満たし合計8点以上 → 【成約】
+・(A)(B)を満たすが6〜7点、またはパターンCの後日保留など見込みが高い → 【保留】
+・(A)または(B)が未達、もしくは5点以下 → 【失注】
+
+■ 詳細チェックリスト（研修生シート準拠）
+各項目を「◎達成／△一部／✕未達／−該当なし」で採点し、一行で「項目：判定 ｜ 根拠 ｜ 一言改善」の形式で書く。今回の流れで話題に上らなかった項目は「−該当なし」（減点しない）。
 ${EVAL_RUBRIC}
 
-② 良かった点（具体的に2〜3個。どの発言が良かったか引用）
-③ 改善点（2〜3個。「次はこう言う」という具体的な言い換え例文付き）
-④ 今回の裏設定の答え合わせ（名義人の所在パターン・隠れたニーズ・契約状況・性格タイプなど、伏せていた設定を全て開示）
-⑤ 現場で別途確認が必要な項目（身だしなみ・所作・インカム・サンプリング・ジニー等の実ツール操作・本人確認書類の目視・MNP実発行 など、ロープレでは判定できない項目を「現場でチェック」として列挙）
-⑥ 総合判定：「合格」または「不合格（惜しい／要再挑戦）」。合格ゲートは(1)隠れたニーズに刺さるクロージング(2)名義人/決裁者の手配クリア(3)主要情報のヒアリング達成 の3つを全て満たすこと。最後に「重点強化ポイント Top3」を挙げる。
+■ 良かった点（2〜3個。どの発言が良かったか引用）
+■ 改善点（2〜3個。「次はこう言う」という具体的な言い換え例文付き）
+■ 裏設定の答え合わせ（名義人の所在パターン・隠れたニーズ・端末残債・契約状況・性格タイプなど、伏せていた設定を全て開示）
+■ 現場で別途確認が必要な項目（身だしなみ・所作・インカム・サンプリング・ジニー等の実ツール操作・本人確認書類の目視・MNP実発行 など、ロープレでは判定できない項目を列挙）
+■ 重点強化ポイント Top3
 
 指導者の視点で、厳しくも具体的・建設的に書いてください。`;
+
+  // ヒント要求（会話履歴には残さず、単発で指導者に相談する）
+  const HINT_TRIGGER = `（システム内部リクエスト＝これは営業指導者への内緒の相談です。お客様役ではなく指導者として、今この場面で研修生が取るべき「次の一手」を1〜2文で助言してください。裏設定のうち“次に引き出すべき情報”や“今使うべき切り返し”を、答えを言い過ぎない範囲でヒントとして示してください。必ず \`<hint>\` 〜 \`</hint>\` タグで囲んで出力してください。）`;
 
   const START_TRIGGER = `ロープレを開始します。裏設定を生成し、イベントブースで最初に見えるお客様情報だけを提示してください。`;
 
@@ -329,6 +361,11 @@ ${EVAL_RUBRIC}
   let recognizing = false;
   let recognition = null;
   let secrets = [];        // collected secret texts for reveal
+  let salesTurns = 0;      // number of sales (user) utterances this session
+  let startTime = 0;       // session start timestamp
+  let ended = false;       // roleplay concluded (closed / timeout / giveup)
+  const MAX_TURNS = 20;                    // 最大往復数
+  const TIME_LIMIT_MS = 15 * 60 * 1000;    // 制限時間 15分
   const $ = (id) => document.getElementById(id);
 
   // ---------- Persistence & provider switching ----------
@@ -432,7 +469,7 @@ ${EVAL_RUBRIC}
     const idx = parseInt($("voiceSel").value, 10);
     if (jaVoices[idx]) u.voice = jaVoices[idx];
     u.rate = 1.02; u.pitch = 1.0;
-    u.onend = () => { if (running && $("autoMic").checked) startRecognition(); };
+    u.onend = () => { if (running && !ended && $("autoMic").checked) startRecognition(); };
     speechSynthesis.speak(u);
   }
   $("stopSpeakBtn").addEventListener("click", () => speechSynthesis.cancel());
@@ -467,7 +504,7 @@ ${EVAL_RUBRIC}
   }
 
   function startRecognition() {
-    if (!recognition || recognizing || !running) return;
+    if (!recognition || recognizing || !running || ended || busy) return;
     speechSynthesis.cancel();
     try { recognition.start(); } catch (_) {}
   }
@@ -512,8 +549,10 @@ ${EVAL_RUBRIC}
     let feedback = null;
     const fm = /<feedback>([\s\S]*?)<\/feedback>/i.exec(raw);
     if (fm) { feedback = fm[1].trim(); spoken = spoken.replace(fm[0], ""); }
-    // closed
-    const closed = /<closed>[\s\S]*?<\/closed>/i.test(raw);
+    // closed reason (成約 / 保留 / 失注)
+    let closed = null;
+    const cm = /<closed>([\s\S]*?)<\/closed>/i.exec(raw);
+    if (cm) closed = cm[1].trim() || "終了";
     spoken = spoken.replace(/<closed>[\s\S]*?<\/closed>/gi, "");
     spoken = spoken.replace(/<\/?[a-z]+>/gi, "").trim();
     return { spoken, profile, feedback, closed };
@@ -531,12 +570,13 @@ ${EVAL_RUBRIC}
   }
 
   // ---------- API call ----------
-  async function callAPI() {
+  async function callAPI(msgs) {
+    msgs = msgs || messages;
     const key = $("apiKey").value.trim();
     if (!key) { setStatus("⚠️ APIキーを入力してください。"); return null; }
     const model = $("model").value;
-    if ($("provider").value === "anthropic") return callAnthropic(key, model);
-    return callGemini(key, model);
+    if ($("provider").value === "anthropic") return callAnthropic(key, model, msgs);
+    return callGemini(key, model, msgs);
   }
 
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -566,7 +606,7 @@ ${EVAL_RUBRIC}
     throw lastErr;
   }
 
-  async function callAnthropic(key, model) {
+  async function callAnthropic(key, model, msgs) {
     return withRetry(async () => {
       const resp = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
@@ -580,7 +620,7 @@ ${EVAL_RUBRIC}
           model: model,
           max_tokens: 4096,
           system: SYSTEM_PROMPT,
-          messages: messages
+          messages: msgs
         })
       });
       if (!resp.ok) {
@@ -624,8 +664,8 @@ ${EVAL_RUBRIC}
     return cand.content.parts.map(p => p.text || "").join("");
   }
 
-  async function callGemini(key, model) {
-    const contents = messages.map(m => ({
+  async function callGemini(key, model, msgs) {
+    const contents = msgs.map(m => ({
       role: m.role === "assistant" ? "model" : "user",
       parts: [{ text: m.content }]
     }));
@@ -649,6 +689,28 @@ ${EVAL_RUBRIC}
     throw lastErr;
   }
 
+  let busy = false;
+
+  // Enable/disable controls based on running / ended state (when not mid-request).
+  function updateControls() {
+    if (busy) return;
+    const active = running && !ended;
+    $("text").disabled = !active;
+    $("sendBtn").disabled = !active;
+    $("hintBtn").disabled = !active;
+    if (recognition) $("micBtn").disabled = !active;
+    $("endBtn").disabled = !running;                 // scoring allowed even after end
+    $("replayBtn").disabled = messages.length < 2;   // needs a generated persona
+    $("revealBtn").disabled = secrets.length === 0;
+  }
+
+  function updateTurnInfo() {
+    if (!running) { $("turnInfo").textContent = ""; return; }
+    const elapsed = startTime ? Date.now() - startTime : 0;
+    const remainMin = Math.max(0, Math.ceil((TIME_LIMIT_MS - elapsed) / 60000));
+    $("turnInfo").textContent = "往復 " + salesTurns + " / " + MAX_TURNS + "　・　残り約 " + remainMin + " 分";
+  }
+
   async function turn(triggerText, isFeedback) {
     messages.push({ role: "user", content: triggerText });
     showTyping();
@@ -660,7 +722,6 @@ ${EVAL_RUBRIC}
       messages.push({ role: "assistant", content: raw });
       const { spoken, profile, feedback, closed } = parseAssistant(raw);
       if (profile) renderProfile(profile);
-      if (secrets.length) $("revealBtn").disabled = false;
       if (feedback) {
         addBubble("feedback", "🎓 指導者フィードバック", feedback);
       } else if (spoken) {
@@ -668,7 +729,12 @@ ${EVAL_RUBRIC}
         speak(spoken);
       }
       if (closed) {
-        addBubble("system", "", "🎉 成約！ お疲れさまでした。「フィードバックをもらう」で振り返りができます。");
+        ended = true;
+        let msg;
+        if (/成約/.test(closed)) msg = "🎉 成約！ お疲れさまでした。「🏁 終了して採点＆フィードバック」で振り返りましょう。";
+        else if (/保留/.test(closed)) msg = "📌 保留（見込み客化）。再来店の約束が取れました。採点で振り返りましょう。";
+        else msg = "🚪 失注。お客様は立ち去りました。採点で改善点を確認しましょう。";
+        addBubble("system", "", msg);
       }
     } catch (e) {
       hideTyping();
@@ -680,47 +746,94 @@ ${EVAL_RUBRIC}
       }
     } finally {
       setBusy(false);
+      updateTurnInfo();
     }
   }
 
   function setBusy(b) {
-    $("sendBtn").disabled = b || !running;
-    $("micBtn").disabled = b || !running || !recognition;
-    $("text").disabled = b || !running;
+    busy = b;
     $("startBtn").disabled = b;
+    if (b) {
+      ["sendBtn", "micBtn", "text", "hintBtn", "endBtn", "replayBtn"].forEach(id => { $(id).disabled = true; });
+    } else {
+      updateControls();
+    }
   }
 
   // ---------- Actions ----------
   async function startRoleplay() {
     if (!$("apiKey").value.trim()) { setStatus("⚠️ 先にAPIキーを入力してください。"); return; }
     localStorage.setItem("key_" + $("provider").value, $("apiKey").value.trim());
-    running = true; messages = []; secrets = [];
+    running = true; ended = false; messages = []; secrets = [];
+    salesTurns = 0; startTime = Date.now();
     chat.innerHTML = ""; $("profile").innerHTML = '<div class="empty">生成中…</div>';
-    $("revealBtn").disabled = true;
-    $("text").disabled = false; $("sendBtn").disabled = false; $("endBtn").disabled = false;
-    if (recognition) $("micBtn").disabled = false;
     $("startBtn").textContent = "▶ 最初からやり直す";
     addBubble("system", "", "イベントブースの前。お客様がブースに近づいてきました。");
     await turn(START_TRIGGER, false);
     setStatus("営業マン側からトークをスタートしてください（マイク🎤 または テキスト入力）。");
+    updateTurnInfo();
   }
 
   function sendMessage(text) {
     const val = (text || $("text").value).trim();
-    if (!val || !running) return;
+    if (!val || !running || ended || busy) return;
     addBubble("sales", "🧑‍💼 あなた（営業）", val);
     $("text").value = "";
-    turn(val, false);
+    salesTurns++;
+    const elapsed = startTime ? Date.now() - startTime : 0;
+    const over = salesTurns >= MAX_TURNS || elapsed >= TIME_LIMIT_MS;
+    let content = val;
+    if (over) {
+      content += "\n\n（システム制御：規定のターン数または制限時間に達しました。お客様は「あ、もう時間なので帰りますね」と丁寧に断って立ち去り、会話を終えてください。これは失注です。発言の最後に <closed>失注</closed> を付けてください。）";
+    }
+    updateTurnInfo();
+    turn(content, false);
+  }
+
+  async function requestHint() {
+    if (!running || ended || busy) return;
+    if (!$("apiKey").value.trim()) { setStatus("⚠️ APIキーを入力してください。"); return; }
+    setBusy(true);
+    setStatus("💡 指導者に相談中…");
+    try {
+      // Ad-hoc call that is NOT saved into the roleplay history.
+      const raw = await callAPI(messages.concat([{ role: "user", content: HINT_TRIGGER }]));
+      if (raw === null) { setBusy(false); return; }
+      let hint = raw;
+      const hm = /<hint>([\s\S]*?)<\/hint>/i.exec(raw);
+      if (hm) hint = hm[1].trim();
+      hint = hint.replace(/<\/?[a-z]+>/gi, "").trim();
+      addBubble("hint", "💡 指導者からのヒント（お客様には聞こえていません）", hint);
+      setStatus("");
+    } catch (e) {
+      addBubble("system", "", "❌ ヒント取得エラー: " + e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function replaySameCustomer() {
+    if (messages.length < 2) return;
+    speechSynthesis.cancel();
+    messages = messages.slice(0, 2);   // keep START trigger + persona/profile turn
+    salesTurns = 0; startTime = Date.now(); ended = false; running = true;
+    chat.innerHTML = "";
+    addBubble("system", "", "🔁 同じお客様でやり直します。設定は同じ、会話だけリセットしました。");
+    addBubble("system", "", "営業マン側からトークをスタートしてください。");
+    setStatus(""); updateTurnInfo(); updateControls();
   }
 
   $("startBtn").addEventListener("click", startRoleplay);
   $("sendBtn").addEventListener("click", () => sendMessage());
+  $("hintBtn").addEventListener("click", requestHint);
+  $("replayBtn").addEventListener("click", replaySameCustomer);
   $("text").addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
   });
   $("endBtn").addEventListener("click", () => {
-    if (!running) return;
+    if (!running || busy) return;
     speechSynthesis.cancel();
+    ended = true;
     turn(FEEDBACK_TRIGGER, true);
   });
   $("revealBtn").addEventListener("click", () => {
@@ -728,13 +841,13 @@ ${EVAL_RUBRIC}
     addBubble("secret", "🔍 裏設定（答え合わせ）", secrets.join("\n\n"));
   });
   $("resetBtn").addEventListener("click", () => {
-    running = false; messages = []; secrets = [];
+    running = false; ended = false; messages = []; secrets = [];
+    salesTurns = 0; startTime = 0;
     speechSynthesis.cancel();
     chat.innerHTML = ""; $("profile").innerHTML = '<div class="empty">「ロープレ開始」を押すと、イベントブースで見えるお客様情報が表示されます。</div>';
-    $("text").disabled = true; $("sendBtn").disabled = true; $("micBtn").disabled = true;
-    $("endBtn").disabled = true; $("revealBtn").disabled = true;
+    setBusy(false);
     $("startBtn").textContent = "▶ ロープレ開始";
-    setStatus("");
+    setStatus(""); $("turnInfo").textContent = "";
   });
 
   // ---------- Init ----------
