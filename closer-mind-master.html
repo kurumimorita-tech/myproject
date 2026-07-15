@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Closer Mind Master（仮）— マインドバトル・プロトタイプ</title>
+<style>
+  :root{
+    --bg0:#0b1020; --bg1:#141b34; --panel:#1b2547; --panel2:#232f5c;
+    --accent:#ff5a3c; --accent2:#ffb02e; --hot:#ff3d6e; --cool:#38bdf8;
+    --good:#37e6a0; --warn:#ffd23f; --bad:#ff4d5e; --ink:#eaf0ff; --muted:#95a3c9;
+    --hp:#ff4d5e; --temp1:#38bdf8; --temp2:#ffb02e; --temp3:#ff3d6e;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;margin:0;}
+  body{
+    font-family:"Hiragino Kaku Gothic ProN","Yu Gothic",system-ui,sans-serif;
+    background:radial-gradient(120% 120% at 50% -10%, #1a2650 0%, var(--bg0) 60%);
+    color:var(--ink); overflow:hidden; user-select:none;
+  }
+  #app{position:fixed; inset:0; display:flex; align-items:center; justify-content:center;}
+
+  /* ===== 縦持ち時の回転ガイド ===== */
+  #rotate{
+    display:none; position:fixed; inset:0; z-index:99; background:var(--bg0);
+    flex-direction:column; align-items:center; justify-content:center; gap:18px; text-align:center; padding:24px;
+  }
+  #rotate .ph{font-size:64px; animation:tilt 1.6s ease-in-out infinite;}
+  @keyframes tilt{0%,100%{transform:rotate(0)}50%{transform:rotate(-90deg)}}
+  @media (max-aspect-ratio:1/1){ #rotate{display:flex;} #app{filter:blur(3px);} }
+
+  .screen{width:100%; height:100%; display:none; flex-direction:column;}
+  .screen.active{display:flex;}
+
+  /* ===== 共通ボタン ===== */
+  .btn{
+    border:none; border-radius:14px; padding:14px 22px; font-size:17px; font-weight:800; cursor:pointer;
+    color:#141b34; background:linear-gradient(180deg,var(--accent2),var(--accent));
+    box-shadow:0 6px 0 #b33217, 0 10px 20px rgba(0,0,0,.4); transition:transform .06s, box-shadow .06s;
+  }
+  .btn:active{transform:translateY(4px); box-shadow:0 2px 0 #b33217;}
+  .btn.ghost{background:linear-gradient(180deg,#2c3a6e,#232f5c);color:var(--ink);box-shadow:0 6px 0 #0d1428;}
+  .btn.ghost:active{box-shadow:0 2px 0 #0d1428;}
+
+  /* ===== タイトル ===== */
+  #title{align-items:center; justify-content:center; gap:22px; text-align:center;}
+  .logo{line-height:1.02;}
+  .logo .l1{font-size:clamp(30px,7vw,64px); font-weight:900; letter-spacing:2px;
+    background:linear-gradient(180deg,#fff,#ffd23f 55%,#ff5a3c);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    text-shadow:0 4px 0 rgba(0,0,0,.35); transform:skewX(-6deg);}
+  .logo .l2{font-size:clamp(13px,2.4vw,20px); color:var(--accent2); font-weight:800; letter-spacing:6px; margin-top:6px;}
+  .tag{color:var(--muted); max-width:560px; font-size:14px; line-height:1.7;}
+
+  /* ===== ステージ選択 ===== */
+  #stageSel{padding:18px 20px; gap:14px;}
+  .head{display:flex; align-items:center; gap:12px;}
+  .head h2{margin:0; font-size:20px;}
+  .cards{display:flex; gap:14px; flex:1; align-items:stretch; overflow-x:auto; padding:6px 2px;}
+  .card{min-width:210px; flex:1; background:linear-gradient(180deg,var(--panel2),var(--panel));
+    border:1px solid #33427e; border-radius:18px; padding:16px; cursor:pointer;
+    display:flex; flex-direction:column; gap:10px; transition:transform .1s, border-color .1s;}
+  .card:hover{transform:translateY(-4px); border-color:var(--accent2);}
+  .card .lv{font-size:12px; font-weight:800; color:var(--accent2); letter-spacing:1px;}
+  .card .face{font-size:52px; text-align:center;}
+  .card .nm{font-size:18px; font-weight:900;}
+  .card .ds{font-size:12.5px; color:var(--muted); line-height:1.6; flex:1;}
+  .card .go{align-self:flex-start; font-size:12px; font-weight:800; color:#141b34;
+    background:var(--accent2); border-radius:999px; padding:5px 12px;}
+
+  /* ===== バトル ===== */
+  #battle{padding:10px 14px 12px;}
+  .topbar{display:flex; gap:14px; align-items:stretch;}
+  .gauge{flex:1; background:rgba(0,0,0,.28); border:1px solid #2b3767; border-radius:12px; padding:8px 12px;}
+  .gauge .row{display:flex; justify-content:space-between; align-items:center; font-size:12px; color:var(--muted); font-weight:700;}
+  .gauge .row b{color:var(--ink); font-size:13px;}
+  .bar{height:16px; border-radius:999px; background:#0c1330; overflow:hidden; margin-top:6px; position:relative; border:1px solid #000;}
+  .bar > i{display:block; height:100%; width:0%; border-radius:999px; transition:width .5s cubic-bezier(.2,.9,.2,1);}
+  #tempFill{background:linear-gradient(90deg,var(--temp1),var(--temp2) 60%,var(--temp3));}
+  #hpFill{background:linear-gradient(90deg,#ff8a4d,var(--hp)); transition:width .35s;}
+  .combo{min-width:92px; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    background:rgba(0,0,0,.28); border:1px solid #2b3767; border-radius:12px; padding:6px 8px;}
+  .combo .n{font-size:26px; font-weight:900; color:var(--accent2); line-height:1;}
+  .combo .t{font-size:10px; color:var(--muted); font-weight:800; letter-spacing:1px;}
+  .combo.pulse .n{animation:pop .4s;}
+  @keyframes pop{0%{transform:scale(1)}40%{transform:scale(1.5)}100%{transform:scale(1)}}
+
+  .arena{flex:1; display:flex; gap:16px; align-items:center; min-height:0; margin-top:10px;}
+  .npc{width:40%; display:flex; flex-direction:column; align-items:center; justify-content:center; position:relative;}
+  .npcFace{font-size:clamp(70px,16vw,150px); filter:drop-shadow(0 10px 14px rgba(0,0,0,.5)); transition:transform .2s;}
+  .npc .name{margin-top:4px; font-size:13px; font-weight:800; color:var(--muted);}
+  .npc.hit{animation:shake .4s;}
+  @keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-10px)}40%{transform:translateX(9px)}60%{transform:translateX(-7px)}80%{transform:translateX(5px)}}
+  .heat{position:absolute; top:-6px; font-size:22px; opacity:0; pointer-events:none;}
+
+  .speech{flex:1; align-self:center; position:relative;
+    background:linear-gradient(180deg,#fff,#eef2ff); color:#161c2e; border-radius:18px; padding:18px 20px;
+    font-size:clamp(15px,2.5vw,21px); font-weight:800; line-height:1.55; box-shadow:0 10px 22px rgba(0,0,0,.4);}
+  .speech::before{content:""; position:absolute; left:-16px; top:44px; border:12px solid transparent; border-right-color:#fff;}
+  .speech .tagline{display:block; font-size:11px; font-weight:800; color:var(--accent); margin-bottom:6px; letter-spacing:1px;}
+
+  .choices{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px;}
+  .choice{position:relative; text-align:left; background:linear-gradient(180deg,var(--panel2),var(--panel));
+    border:1px solid #34437f; border-radius:14px; padding:12px 14px 12px 40px; color:var(--ink);
+    font-size:14.5px; font-weight:700; cursor:pointer; line-height:1.45; transition:transform .07s, border-color .1s;}
+  .choice:hover{border-color:var(--accent2); transform:translateY(-2px);}
+  .choice:active{transform:translateY(1px);}
+  .choice .key{position:absolute; left:12px; top:12px; width:20px; height:20px; border-radius:6px;
+    background:var(--accent2); color:#141b34; font-size:12px; font-weight:900; display:flex; align-items:center; justify-content:center;}
+  .choice[disabled]{opacity:.55; cursor:default; transform:none;}
+  .choice.reveal-good{border-color:var(--good); box-shadow:0 0 0 2px rgba(55,230,160,.35) inset;}
+  .choice.reveal-bad{border-color:var(--bad); box-shadow:0 0 0 2px rgba(255,77,94,.3) inset;}
+
+  /* フローティング数字 */
+  .float{position:fixed; z-index:40; font-weight:900; font-size:30px; pointer-events:none;
+    text-shadow:0 2px 6px rgba(0,0,0,.6); animation:floatUp 1s ease-out forwards;}
+  @keyframes floatUp{0%{opacity:0;transform:translateY(0) scale(.6)}15%{opacity:1;transform:translateY(-8px) scale(1.1)}100%{opacity:0;transform:translateY(-60px) scale(1)}}
+
+  /* ===== 結果オーバーレイ ===== */
+  .overlay{position:fixed; inset:0; z-index:60; display:none; align-items:center; justify-content:center; padding:24px;
+    background:rgba(6,10,24,.82); backdrop-filter:blur(4px);}
+  .overlay.active{display:flex; animation:fade .3s;}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .result{max-width:560px; text-align:center; background:linear-gradient(180deg,var(--panel2),var(--panel));
+    border:1px solid #3a4a8c; border-radius:22px; padding:26px; box-shadow:0 20px 60px rgba(0,0,0,.6);}
+  .result .big{font-size:clamp(30px,7vw,56px); font-weight:900; letter-spacing:2px;}
+  .result.win .big{background:linear-gradient(180deg,#fff,#37e6a0);-webkit-background-clip:text;background-clip:text;color:transparent;}
+  .result.lose .big{background:linear-gradient(180deg,#fff,#ff5a3c);-webkit-background-clip:text;background-clip:text;color:transparent;}
+  .result .quote{margin:14px 0 6px; font-size:17px; font-weight:800; color:var(--accent2); line-height:1.6;}
+  .result .sub{color:var(--muted); font-size:13px; margin-bottom:18px; line-height:1.6;}
+  .result .acts{display:flex; gap:12px; justify-content:center; flex-wrap:wrap;}
+  .conf{position:fixed; top:-20px; font-size:20px; z-index:61; pointer-events:none; animation:conf 2.2s linear forwards;}
+  @keyframes conf{to{transform:translateY(110vh) rotate(720deg); opacity:.2;}}
+
+  .foot{margin-top:8px; text-align:center; font-size:11px; color:var(--muted);}
+</style>
+</head>
+<body>
+
+<div id="rotate">
+  <div class="ph">📱</div>
+  <div style="font-weight:900;font-size:20px">横画面にしてね</div>
+  <div style="color:var(--muted);font-size:13px">Closer Mind Master はスマホ横持ちで遊ぶバトルアプリです</div>
+</div>
+
+<div id="app">
+
+  <!-- ① タイトル -->
+  <section class="screen active" id="title">
+    <div class="logo">
+      <div class="l1">CLOSER MIND MASTER</div>
+      <div class="l2">— 断られても、うろたえない —</div>
+    </div>
+    <p class="tag">
+      顧客の強烈な拒絶文句を、ブレない一言で切り返せ。<br>
+      温度感メーターを100%にすれば<b>成約クリア</b>。うろたえるとメンタルHPが削られる。<br>
+      失注は成功へのプロセス。何度でも挑戦しよう。
+    </p>
+    <button class="btn" onclick="Game.goStageSelect()">▶ バトル開始</button>
+    <div class="foot">プロトタイプ / 効果音ON（タップで有効化）</div>
+  </section>
+
+  <!-- ② ステージ選択 -->
+  <section class="screen" id="stageSel">
+    <div class="head">
+      <button class="btn ghost" style="padding:8px 14px;font-size:14px" onclick="Game.show('title')">‹ 戻る</button>
+      <h2>対戦相手を選べ</h2>
+    </div>
+    <div class="cards" id="cardList"></div>
+    <div class="foot">Lvが上がるほど拒絶がキツく、選択肢の見極めが難しくなる</div>
+  </section>
+
+  <!-- ③ バトル -->
+  <section class="screen" id="battle">
+    <div class="topbar">
+      <div class="gauge">
+        <div class="row"><span id="npcName">顧客</span><b><span id="tempVal">0</span>%</b></div>
+        <div class="bar"><i id="tempFill"></i></div>
+        <div class="row" style="margin-top:2px"><span>温度感メーター（100%で成約）</span></div>
+      </div>
+      <div class="combo" id="comboBox">
+        <div class="n" id="comboN">0</div>
+        <div class="t">COMBO</div>
+      </div>
+      <div class="gauge">
+        <div class="row"><span>あなた（メンタル）</span><b><span id="hpVal">100</span>/100</b></div>
+        <div class="bar"><i id="hpFill"></i></div>
+        <div class="row" style="margin-top:2px"><span>HP 0でメンタルブレイク＝失注</span></div>
+      </div>
+    </div>
+
+    <div class="arena">
+      <div class="npc" id="npc">
+        <div class="npcFace" id="npcFace">😠</div>
+        <div class="name" id="npcTitle">顧客</div>
+      </div>
+      <div class="speech">
+        <span class="tagline" id="objTag">拒絶</span>
+        <span id="objText">…</span>
+      </div>
+    </div>
+
+    <div class="choices" id="choices"></div>
+    <div class="foot" id="turnInfo"></div>
+  </section>
+
+</div>
+
+<!-- 結果オーバーレイ -->
+<div class="overlay" id="overlay">
+  <div class="result" id="resultBox">
+    <div class="big" id="resultBig">RESULT</div>
+    <div class="quote" id="resultQuote"></div>
+    <div class="sub" id="resultSub"></div>
+    <div class="acts" id="resultActs"></div>
+  </div>
+</div>
+
+<script>
+/* =========================================================================
+   ゲームデータ：ステージ（顧客）と拒絶ターン。
+   choice.tag: good=刺さる / ok=悪くない / brace=ブレてHP減 / mine=地雷(大ダメージ)
+   temp/hp はメーターへの増減量。react は顧客の反応セリフ。
+   ========================================================================= */
+const STAGES = [
+  {
+    id:"budget", lv:1, name:"予算しぶり課長", cardFace:"😒",
+    desc:"「金がない」を盾に即断る守り重視タイプ。数字より“課題”に触れると心が動く。",
+    turns:[
+      {
+        tag:"予算アウト",
+        text:"「うちは今、人を採る予算がなくてね。派遣なんて贅沢だよ。」",
+        choices:[
+          {t:"ですよね、予算がないなら仕方ないです。また景気が良くなったら…", tag:"brace", temp:-3, hp:-15,
+           react:"「まあ、そういうことだね。」（会話が終わりかけている…）"},
+          {t:"“予算がない”のは、今いる方に無理をさせてしまっているサインかもしれません。", tag:"good", temp:20, hp:0,
+           react:"「うっ…確かに現場は残業続きではあるが…。」"},
+          {t:"実は他社より安いんです！今なら初期費用も無料で…！", tag:"brace", temp:-2, hp:-10,
+           react:"「値段の話じゃないんだよ。急に売り込まれると引くなあ。」"},
+          {t:"御社の繁忙期って、いつ頃ですか？", tag:"ok", temp:8, hp:0,
+           react:"「繁忙期？まあ、年度末は毎年てんてこ舞いだけど…。」"},
+        ]
+      },
+      {
+        tag:"人手は足りてる（建前）",
+        text:"「でも今いる社員で何とか回ってるからさ。困ってはいないよ。」",
+        choices:[
+          {t:"そうですか、回っているなら大丈夫ですね。失礼しました。", tag:"mine", temp:-5, hp:-20,
+           react:"「あ、うん…（え、もう帰るの？）」"},
+          {t:"“何とか”ということは、どこかに無理が出ていませんか？例えば残業や離職で。", tag:"good", temp:22, hp:0,
+           react:"「…実は先月も一人辞めてね。正直ヒヤヒヤしてるんだ。」"},
+          {t:"回ってるうちが実は一番危ないんですよ！倒れますよ！", tag:"brace", temp:-3, hp:-12,
+           react:"「脅されてる気分だなあ…。」"},
+          {t:"繁忙期の年度末、その“何とか”は保ちそうですか？", tag:"good", temp:16, hp:0,
+           react:"「うーん、年度末はさすがに厳しいかもしれん…。」"},
+        ]
+      },
+      {
+        tag:"本音がこぼれる",
+        text:"「正直、また辞められると採用し直しでキリがないんだよ…。」",
+        choices:[
+          {t:"それ、まさに派遣で解決できる課題です。採用の手間ゼロで、必要な期間だけ確保できます。", tag:"good", temp:26, hp:0,
+           react:"「なるほど…採り直しの手間がないのは大きいな。」"},
+          {t:"わかります。うちの正社員紹介ならもう辞めません！", tag:"brace", temp:-4, hp:-14,
+           react:"「いや、今その話はしてないだろ…。」"},
+          {t:"辞めるのは御社の働き方に問題があるからでは？", tag:"mine", temp:-8, hp:-22,
+           react:"「…なんだと？失礼な人だな。」"},
+          {t:"まずは1名だけ、繁忙期のお試しから始めてみませんか？", tag:"good", temp:20, hp:0,
+           react:"「1名なら…試してみる価値はあるか。」"},
+        ]
+      },
+      {
+        tag:"クロージング",
+        text:"「…で、結局いくらかかって、何がどう良くなるの？」",
+        choices:[
+          {t:"月◯万で、採用コストと残業代が浮きます。まずは1名・1ヶ月から。判断はそのあとで大丈夫です。", tag:"good", temp:30, hp:0,
+           react:"「それなら安心だ。じゃあ1名、頼んでみようかな。」"},
+          {t:"高いと感じるかもですが、価値はあります！たぶん！", tag:"brace", temp:-5, hp:-16,
+           react:"「“たぶん”て…不安になるなあ。」"},
+          {t:"とりあえず契約書にサインを！", tag:"mine", temp:-10, hp:-25,
+           react:"「押し売りは嫌いだ。帰ってくれ。」"},
+          {t:"御社の年度末に合わせて、来月から1名で組みましょう。", tag:"good", temp:24, hp:0,
+           react:"「うん、そのスケジュールなら乗れる。」"},
+        ]
+      },
+    ]
+  },
+  {
+    id:"other", lv:2, name:"他社ラブ担当", cardFace:"😑",
+    desc:"「他社で十分」が口ぐせ。比較や否定はNG。相手を立てつつ“差”に気づかせろ。",
+    turns:[
+      {
+        tag:"他社で十分",
+        text:"「もう別の派遣会社さんと付き合いあるから。間に合ってます。」",
+        choices:[
+          {t:"うちの方が安いですよ、乗り換えましょう！", tag:"mine", temp:-8, hp:-20,
+           react:"「いきなり乗り換えとか、義理がないなあ…。」"},
+          {t:"素晴らしいですね。良いパートナーがいるのは強みです。差し支えなければ、決め手を教えてください。", tag:"good", temp:22, hp:0,
+           react:"「決め手か…対応の速さかな。ただ最近は人が集まりにくいらしくて。」"},
+          {t:"その会社、評判悪いですよ？", tag:"mine", temp:-10, hp:-24,
+           react:"「人の取引先を悪く言う人とは組めないね。」"},
+          {t:"併用されている会社さんも多いですよ。保険として話だけでも。", tag:"ok", temp:10, hp:0,
+           react:"「まあ、話を聞くだけなら…。」"},
+        ]
+      },
+      {
+        tag:"隠れた不満",
+        text:"「まあ最近、頼んでも人がなかなか来ないのは事実だけどね…。」",
+        choices:[
+          {t:"それ、致命的ですよ。早く変えないと！", tag:"brace", temp:-4, hp:-14,
+           react:"「そんな煽られてもね…。」"},
+          {t:"“来ない”のは繁忙期に痛いですよね。うちは登録者の稼働状況をリアルタイムで持っています。", tag:"good", temp:24, hp:0,
+           react:"「へえ、すぐ手配できるのは助かるな。」"},
+          {t:"うちなら絶対大丈夫です！100%来ます！", tag:"brace", temp:-3, hp:-12,
+           react:"「“絶対”“100%”は逆に怪しいなあ。」"},
+          {t:"今、一番人手が欲しいのはどの職種ですか？", tag:"good", temp:18, hp:0,
+           react:"「そうだな、軽作業の短期がいつも足りない。」"},
+        ]
+      },
+      {
+        tag:"比較の壁",
+        text:"「でも今さら新しいとこに一から説明するの、面倒なんだよね。」",
+        choices:[
+          {t:"その手間、こちらが全部巻き取ります。既存の条件をそのまま引き継ぐ形で並走させてください。", tag:"good", temp:26, hp:0,
+           react:"「引き継ぎしてくれるなら楽でいいな。」"},
+          {t:"面倒でも変えた方が絶対得です！", tag:"brace", temp:-4, hp:-14,
+           react:"「“絶対”が多いなあ君は。」"},
+          {t:"では今日はやめておきますか。", tag:"mine", temp:-6, hp:-18,
+           react:"「引き際が早いね…（熱意ないのかな）。」"},
+          {t:"まずは今の会社さんで足りない“短期・軽作業”だけ、うちで補完しませんか？", tag:"good", temp:20, hp:0,
+           react:"「補完か。それなら角も立たないな。」"},
+        ]
+      },
+      {
+        tag:"クロージング",
+        text:"「じゃあ…試すとしたら、どう始めるのが一番ラク？」",
+        choices:[
+          {t:"次の繁忙期の“足りない枠”だけ、うちで1件。既存はそのまま。リスクなく比べられます。", tag:"good", temp:30, hp:0,
+           react:"「並べて比べられるのは合理的だ。それでいこう。」"},
+          {t:"全部うちに切り替えましょう！その方が管理も楽です！", tag:"brace", temp:-6, hp:-18,
+           react:"「いや、いきなり全部は無理だって。」"},
+          {t:"迷うなら今決めた方がいいです、埋まっちゃいますよ。", tag:"brace", temp:-5, hp:-16,
+           react:"「煽り営業はちょっと…。」"},
+          {t:"軽作業の短期1件から。日程が決まればすぐ手配します。", tag:"good", temp:24, hp:0,
+           react:"「よし、まずはその1件で頼むよ。」"},
+        ]
+      },
+    ]
+  },
+  {
+    id:"defer", lv:3, name:"決裁引き伸ばし部長", cardFace:"😠",
+    desc:"「検討します」で永遠に逃げる強敵。曖昧を具体に変え、決める理由と期限を作れ。",
+    turns:[
+      {
+        tag:"検討します",
+        text:"「話はわかった。前向きに“検討”しておくよ。」",
+        choices:[
+          {t:"ありがとうございます！ではご連絡お待ちしています！", tag:"mine", temp:-6, hp:-20,
+           react:"「うん、こちらから連絡するよ（＝しない）。」"},
+          {t:"ありがとうございます。“検討”のために、今の不安点をひとつだけ潰させてください。何が引っかかっていますか？", tag:"good", temp:24, hp:0,
+           react:"「まあ…上をどう説得するか、だな。」"},
+          {t:"検討って、いつも流れちゃうやつですよね？", tag:"mine", temp:-8, hp:-22,
+           react:"「失礼だな。そういう言い方をされると余計にやる気が失せる。」"},
+          {t:"前向き、嬉しいです。判断はいつ頃までにされたいですか？", tag:"good", temp:16, hp:0,
+           react:"「そうだな、来月の会議までには決めたい。」"},
+        ]
+      },
+      {
+        tag:"社内の壁",
+        text:"「正直、私はいいと思ってる。ただ上を通すのが大変でね。」",
+        choices:[
+          {t:"では部長が上を説得しやすいよう、費用対効果を1枚にまとめてお持ちします。数字で通しましょう。", tag:"good", temp:26, hp:0,
+           react:"「資料を作ってくれるのか。それは助かる。」"},
+          {t:"部長の一存で決められないんですか？", tag:"mine", temp:-9, hp:-24,
+           react:"「…君は人の立場をわかってないな。」"},
+          {t:"上司の方に直接話させてください！", tag:"brace", temp:-4, hp:-14,
+           react:"「いや、順序ってものがあるだろ。」"},
+          {t:"上を通す一番のネックは、コストですか？効果への確信ですか？", tag:"good", temp:20, hp:0,
+           react:"「効果だな。本当に回るのか、そこを見られる。」"},
+        ]
+      },
+      {
+        tag:"リスク不安",
+        text:"「もし採ってみて合わなかったら、また面倒なことになるだろ？」",
+        choices:[
+          {t:"合わなければ交代できます。まず短期でお試しし、“効果を見てから本採用”の二段構えにしましょう。", tag:"good", temp:26, hp:0,
+           react:"「試してから、なら上も納得しやすいな。」"},
+          {t:"合わないなんてことは絶対ありません！", tag:"brace", temp:-5, hp:-16,
+           react:"「“絶対”はビジネスでは信じないよ。」"},
+          {t:"合わなかったら…そのときはそのときで。", tag:"brace", temp:-4, hp:-14,
+           react:"「無責任だなあ。」"},
+          {t:"最初の1ヶ月を評価期間にしませんか？合わなければ費用は最小限で止められます。", tag:"good", temp:20, hp:0,
+           react:"「評価期間か。それなら会議に出せる。」"},
+        ]
+      },
+      {
+        tag:"クロージング",
+        text:"「わかった。じゃあ…来月の会議で、どう切り出せばいい？」",
+        choices:[
+          {t:"“短期1名で効果検証、良ければ増員”という一文でOKです。資料は明日お送りします。会議の日程だけ押さえましょう。", tag:"good", temp:32, hp:0,
+           react:"「よし、その線で会議にかける。日程は◯日だ。」"},
+          {t:"“全社導入で大幅コスト削減”と大きく出ましょう！", tag:"brace", temp:-6, hp:-18,
+           react:"「盛りすぎだ。上に見抜かれるよ。」"},
+          {t:"とにかく通してください、お願いします！", tag:"brace", temp:-5, hp:-16,
+           react:"「熱意は買うが、材料をくれないと動けない。」"},
+          {t:"会議までに“1枚資料”をお渡しします。あとは日程を決めるだけです。", tag:"good", temp:24, hp:0,
+           react:"「頼んだ。こちらも準備しておくよ。」"},
+        ]
+      },
+    ]
+  },
+];
+
+const QUOTES = [
+  "失注は、成約へのプロセスだ。",
+  "断られた数だけ、マインドは強くなる。",
+  "うろたえた瞬間に負ける。次はブレるな。",
+  "「NO」は「まだ理由が足りない」の合図。",
+  "打席に立ち続けた者だけが、ヒットを打つ。",
+];
+
+/* ===== 効果音（Web Audio、外部アセット不要） ===== */
+const Sfx = (()=>{
+  let ctx=null;
+  const ensure=()=>{ if(!ctx){ try{ctx=new (window.AudioContext||window.webkitAudioContext)();}catch(e){} } };
+  const tone=(freq,dur,type="square",vol=.16,slideTo=null)=>{
+    ensure(); if(!ctx) return;
+    const o=ctx.createOscillator(), g=ctx.createGain();
+    o.type=type; o.frequency.setValueAtTime(freq,ctx.currentTime);
+    if(slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, ctx.currentTime+dur);
+    g.gain.setValueAtTime(vol,ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(.0001,ctx.currentTime+dur);
+    o.connect(g); g.connect(ctx.destination); o.start(); o.stop(ctx.currentTime+dur);
+  };
+  return {
+    good(){ tone(600,.08,"square",.15); setTimeout(()=>tone(900,.12,"square",.15),70); },
+    ok(){ tone(520,.09,"triangle",.14); },
+    bad(){ tone(200,.22,"sawtooth",.18,90); },
+    win(){ [523,659,784,1046].forEach((f,i)=>setTimeout(()=>tone(f,.16,"square",.16),i*110)); },
+    lose(){ [400,300,200].forEach((f,i)=>setTimeout(()=>tone(f,.25,"sawtooth",.16),i*160)); },
+    combo(){ tone(1200,.1,"square",.14); },
+  };
+})();
+
+/* ===== ゲーム本体 ===== */
+const Game = (()=>{
+  const $ = s=>document.querySelector(s);
+  let stage=null, turnIdx=0, temp=0, hp=100, combo=0, locked=false;
+  const MAXHP=100;
+
+  const el={
+    tempFill:$("#tempFill"), tempVal:$("#tempVal"),
+    hpFill:$("#hpFill"), hpVal:$("#hpVal"),
+    comboN:$("#comboN"), comboBox:$("#comboBox"),
+    face:$("#npcFace"), title:$("#npcTitle"), npcName:$("#npcName"), npc:$("#npc"),
+    objText:$("#objText"), objTag:$("#objTag"), choices:$("#choices"), turnInfo:$("#turnInfo"),
+  };
+
+  function show(id){ document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active")); $("#"+id).classList.add("active"); }
+
+  function goStageSelect(){
+    const list=$("#cardList"); list.innerHTML="";
+    STAGES.forEach(s=>{
+      const c=document.createElement("div"); c.className="card";
+      c.innerHTML=`<div class="lv">STAGE ${s.lv}</div>
+        <div class="face">${s.cardFace}</div>
+        <div class="nm">${s.name}</div>
+        <div class="ds">${s.desc}</div>
+        <div class="go">▶ 挑戦する</div>`;
+      c.onclick=()=>start(s);
+      list.appendChild(c);
+    });
+    show("stageSel");
+  }
+
+  function faceFor(t){
+    if(t>=100) return "😄";
+    if(t>=67)  return "🙂";
+    if(t>=34)  return "🤔";
+    if(t>=15)  return "😒";
+    return "😠";
+  }
+
+  function start(s){
+    stage=s; turnIdx=0; temp=0; hp=MAXHP; combo=0; locked=false;
+    el.npcName.textContent=s.name; el.title.textContent=s.name;
+    show("battle"); renderMeters(); renderTurn();
+  }
+
+  function renderMeters(){
+    el.tempFill.style.width=Math.max(0,Math.min(100,temp))+"%";
+    el.tempVal.textContent=Math.round(temp);
+    el.hpFill.style.width=Math.max(0,Math.min(100,hp/MAXHP*100))+"%";
+    el.hpVal.textContent=Math.max(0,Math.round(hp));
+    el.comboN.textContent=combo;
+    el.face.textContent=faceFor(temp);
+  }
+
+  function renderTurn(){
+    const t=stage.turns[turnIdx];
+    el.objTag.textContent=t.tag;
+    el.objText.textContent=t.text;
+    el.turnInfo.textContent=`ターン ${turnIdx+1} / ${stage.turns.length}　—　◎刺さる回答で温度感UP・ブレるとHPダウン`;
+    el.choices.innerHTML="";
+    // 選択肢をシャッフルして毎回並びを変える
+    const idx=t.choices.map((_,i)=>i);
+    for(let i=idx.length-1;i>0;i--){ const j=(i* 7 + turnIdx*3 + 1)%(i+1); [idx[i],idx[j]]=[idx[j],idx[i]]; }
+    idx.forEach((ci,pos)=>{
+      const ch=t.choices[ci];
+      const b=document.createElement("button"); b.className="choice";
+      b.innerHTML=`<span class="key">${"ABCD"[pos]}</span>${ch.t}`;
+      b.onclick=(e)=>choose(ch,b,e);
+      el.choices.appendChild(b);
+    });
+  }
+
+  function floatText(txt,color,x,y){
+    const f=document.createElement("div"); f.className="float"; f.textContent=txt; f.style.color=color;
+    f.style.left=(x-14)+"px"; f.style.top=(y-30)+"px"; document.body.appendChild(f);
+    setTimeout(()=>f.remove(),1000);
+  }
+
+  function choose(ch,btn,ev){
+    if(locked) return; locked=true;
+    // 選択肢をロックし、良否を色で提示
+    [...el.choices.children].forEach(b=>b.setAttribute("disabled","true"));
+    btn.classList.add((ch.tag==="good"||ch.tag==="ok")?"reveal-good":"reveal-bad");
+
+    const rect=btn.getBoundingClientRect();
+    const cx=ev? ev.clientX : rect.left+rect.width/2;
+    const cy=rect.top;
+
+    // コンボ処理
+    if(ch.tag==="good"){ combo++; if(combo>=2){ Sfx.combo(); el.comboBox.classList.add("pulse"); setTimeout(()=>el.comboBox.classList.remove("pulse"),400);} }
+    else if(ch.tag!=="ok"){ combo=0; }
+
+    // 効果量（コンボボーナス）
+    let dTemp=ch.temp, dHp=ch.hp;
+    if(ch.tag==="good" && combo>=2){ dTemp+=Math.min(10,(combo-1)*3); }
+
+    // 演出
+    if(ch.tag==="good"){ Sfx.good(); el.npc.classList.add("hit"); setTimeout(()=>el.npc.classList.remove("hit"),400);
+      floatText("+"+dTemp+"🔥", "#37e6a0", cx, cy); }
+    else if(ch.tag==="ok"){ Sfx.ok(); floatText("+"+dTemp, "#ffd23f", cx, cy); }
+    else { Sfx.bad(); document.body.animate([{transform:"translateX(0)"},{transform:"translateX(-8px)"},{transform:"translateX(8px)"},{transform:"translateX(0)"}],{duration:250});
+      floatText(dHp+"❤", "#ff4d5e", cx, cy);
+      if(dTemp<0) floatText(dTemp+"🔥", "#ff8a4d", cx+40, cy); }
+
+    // 反応セリフを吹き出しに一時表示
+    el.objTag.textContent="顧客の反応";
+    el.objText.textContent=ch.react;
+
+    // 値を反映
+    temp=Math.max(0,Math.min(100,temp+dTemp));
+    hp=Math.max(0,hp+dHp);
+    renderMeters();
+
+    setTimeout(()=>{
+      if(hp<=0){ return lose(); }
+      if(temp>=100){ return win(); }
+      turnIdx++;
+      if(turnIdx>=stage.turns.length){
+        // ターンを撃ち切ったが100%未満 → もう一周（詰めきれず）だが温度は保持
+        turnIdx=0;
+        el.turnInfo.textContent="まだ決めきれない…もう一押し！";
+      }
+      locked=false; renderTurn();
+    }, 1150);
+  }
+
+  function overlay(cls,big,quote,sub,acts){
+    const box=$("#resultBox"), ov=$("#overlay");
+    box.className="result "+cls;
+    $("#resultBig").textContent=big;
+    $("#resultQuote").textContent=quote;
+    $("#resultSub").textContent=sub;
+    const a=$("#resultActs"); a.innerHTML="";
+    acts.forEach(ac=>{ const b=document.createElement("button"); b.className="btn"+(ac.ghost?" ghost":""); b.textContent=ac.label; b.onclick=ac.fn; a.appendChild(b); });
+    ov.classList.add("active");
+  }
+  function closeOverlay(){ $("#overlay").classList.remove("active"); }
+
+  function confetti(){
+    const emo=["🎉","✨","🎊","💰","🤝","⭐"];
+    for(let i=0;i<28;i++){ const c=document.createElement("div"); c.className="conf";
+      c.textContent=emo[i%emo.length]; c.style.left=Math.floor((i*37)%100)+"%";
+      c.style.animationDelay=(i%10)*0.12+"s"; document.body.appendChild(c);
+      setTimeout(()=>c.remove(),2600); }
+  }
+
+  function win(){
+    Sfx.win(); confetti();
+    const next=STAGES[STAGES.indexOf(stage)+1];
+    const acts=[];
+    if(next) acts.push({label:"▶ 次の相手へ", fn:()=>{closeOverlay(); start(next);}});
+    acts.push({label:"もう一度", ghost:true, fn:()=>{closeOverlay(); start(stage);}});
+    acts.push({label:"相手選択へ", ghost:true, fn:()=>{closeOverlay(); goStageSelect();}});
+    overlay("win","契約成立！ 🤝",
+      "ブレない切り返しが、顧客の温度を100%にした。",
+      `${stage.name} を攻略！　残りメンタルHP：${Math.round(hp)}／100`, acts);
+  }
+
+  function lose(){
+    Sfx.lose();
+    const q=QUOTES[(turnIdx+stage.lv) % QUOTES.length];
+    overlay("lose","メンタルブレイク…",
+      `「${q}」`,
+      "うろたえて温度感を上げきれなかった。でも大丈夫、失注は次の成約の材料だ。",
+      [
+        {label:"▶ すぐリトライ", fn:()=>{closeOverlay(); start(stage);}},
+        {label:"相手選択へ", ghost:true, fn:()=>{closeOverlay(); goStageSelect();}},
+      ]);
+  }
+
+  // キーボード操作（A/B/C/D or 1-4）
+  window.addEventListener("keydown",e=>{
+    if(!$("#battle").classList.contains("active")||locked) return;
+    const map={a:0,b:1,c:2,d:3,"1":0,"2":1,"3":2,"4":3};
+    const i=map[e.key.toLowerCase()];
+    if(i!=null && el.choices.children[i]) el.choices.children[i].click();
+  });
+
+  return { show, goStageSelect, start };
+})();
+</script>
+</body>
+</html>
