@@ -173,11 +173,18 @@ body{
 /* 敵グラフィック */
 .enemyStage{position:absolute; top:11vh; left:0; right:0; bottom:34vh;
   display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1.2vh;}
-.enemy{
-  font-size:clamp(70px,20vh,180px); line-height:1; filter:drop-shadow(0 8px 22px rgba(0,0,0,.6));
-  transition:transform .25s, filter .3s;
+/* 家族グループ（SVGキャラを横並び） */
+#enemyGroup{
+  display:flex; align-items:flex-end; justify-content:center; gap:.6vw;
+  height:42vh; filter:drop-shadow(0 10px 20px rgba(0,0,0,.55));
+  transition:transform .25s;
 }
-.enemy.hit{animation:enemyHit .4s;}
+#enemyGroup.hit{animation:enemyHit .4s;}
+.slot{position:relative; height:100%; display:flex; align-items:flex-end;}
+.slot .person{height:100%; width:auto; display:block;}
+.baby-ov{position:absolute; bottom:1%; left:50%; transform:translateX(-32%);
+  width:46%; z-index:3; filter:drop-shadow(0 3px 6px rgba(0,0,0,.4));}
+.baby-ov .person{height:auto; width:100%;}
 @keyframes enemyHit{0%{transform:scale(1)}30%{transform:scale(1.08) translateX(-6px)}60%{transform:scale(1.02) translateX(6px)}100%{transform:scale(1)}}
 .moodRing{
   position:absolute; width:clamp(140px,34vh,320px); height:clamp(140px,34vh,320px);
@@ -329,7 +336,7 @@ body{
       <!-- 敵グラフィック -->
       <div class="enemyStage">
         <div class="moodRing" id="moodRing"></div>
-        <div class="enemy" id="enemyFace">😒</div>
+        <div id="enemyGroup"></div>
         <div class="bubble" id="bubble">…なに？</div>
       </div>
 
@@ -393,6 +400,8 @@ const STAGES = [
     face0: "😒",
     profile: { crowd: "1人（他社ユーザー）", age: "30代・男性", situation: "イベントブースをチラ見しながら通過中" },
     sub: "客層：30代・男性/1人来場 ｜ 自分で調べるタイプ",
+    partyRule: "any",
+    trait: "情報通・自分で調べるタイプ",
     startTemp: 30,
     desc: "料金プランを自分で調べ済み。乗り換え意欲はあるが「営業に丸め込まれたくない」と警戒中。",
     quotes: [
@@ -438,6 +447,8 @@ const STAGES = [
     face0: "😤",
     profile: { crowd: "2人（夫婦＋ベビーカー）", age: "30代後半・夫婦", situation: "買い物ついでで足早、常に時計を気にしている" },
     sub: "客層：30代夫婦/2人来場 ｜ とにかく時間がない",
+    partyRule: "youngFamily",
+    trait: "とにかく時間がない",
     startTemp: 25,
     desc: "話は分かるが「長い営業に付き合う暇はない」。要点だけ・短時間で価値を示せるかが勝負。",
     quotes: [
@@ -483,6 +494,8 @@ const STAGES = [
     face0: "🙄",
     profile: { crowd: "1人（イヤホン装着）", age: "20代・男性", situation: "目も合わせず、そもそも話す気ゼロで素通りしようとする" },
     sub: "客層：20代・男性/1人来場 ｜ 聞く気ゼロ・塩対応",
+    partyRule: "soloYoung",
+    trait: "聞く気ゼロ・塩対応",
     startTemp: 15,
     desc: "最難関。まず“足を止めさせる”一言から。売り込む前に、興味のスイッチを入れられるか。",
     quotes: [
@@ -532,6 +545,228 @@ const OVER_QUOTES = [
   { q:"今の一撃、効いてた。あと一歩だった。", s:"完敗じゃない。惜敗だ。もう一回いけばひっくり返せる。" }
 ];
 
+/* =======================================================================
+   家族層（客層）ジェネレータ ＋ SVGキャラ描画
+   ・添付キャラ絵を参考に、色・髪型・服装でキャラを再現
+   ・現場ごとにお客様の層をランダム生成（子供だけ／単独の子供は出さない）
+   ・単独／夫婦（若い・ご年配）／親子／ご家族／3世代、赤ちゃん抱っこの有無
+   ======================================================================= */
+const CHARS = {
+  grandpa: {skin:'#f0c9a8', hair:'#dcd7d1', cloth:'#7d8c4e', cloth2:'#5f6d3a', brow:'#b7b1aa', style:'bald', cardigan:true, old:true},
+  grandma: {skin:'#f4d0b4', hair:'#d5d0ca', cloth:'#9b5ba6', cloth2:'#7d4787', brow:'#c3bdb6', style:'bun',  cardigan:true, old:true},
+  dad:     {skin:'#f0c39c', hair:'#2b2420', cloth:'#4f9d3a', cloth2:'#3a7a2b', brow:'#2b2420', style:'short', glasses:true, plaid:true},
+  mom:     {skin:'#f7d1b0', hair:'#6e4a2d', cloth:'#e58a2b', cloth2:'#c4711d', brow:'#5c3d25', style:'long'},
+  son:     {skin:'#f3c69e', hair:'#1f1a17', cloth:'#2f80c4', cloth2:'#2467a0', brow:'#1f1a17', style:'spiky', young:true, stripe:true},
+  daughter:{skin:'#f9d4b6', hair:'#5c3f28', cloth:'#e6386e', cloth2:'#c22a58', brow:'#4a3220', style:'bob', young:true, dress:true},
+  youngman:{skin:'#f0c29a', hair:'#211c19', cloth:'#3a3f4a', cloth2:'#2a2e38', brow:'#211c19', style:'short'},
+  baby:    {skin:'#fbd8bd', hair:'#4a3a2c', cloth:'#f2cf4a', cloth2:'#d6b437', brow:'#8a7663', style:'tuft', baby:true},
+};
+const TYPE_INFO = {
+  grandpa:{name:'祖父',age:'60〜70代'}, grandma:{name:'祖母',age:'60〜70代'},
+  dad:{name:'父',age:'30〜40代'}, mom:{name:'母',age:'30〜40代'},
+  son:{name:'息子',age:'子供'}, daughter:{name:'娘',age:'子供'},
+  youngman:{name:'男性',age:'20代'}, baby:{name:'赤ちゃん',age:'乳児'}
+};
+
+const rnd = () => Math.random();
+const chance = (p) => rnd() < p;
+const pick = (a) => a[Math.floor(rnd()*a.length)];
+
+/* ---- 表情パーツ（冷酷 / 悩む / 笑顔） ---- */
+function faceParts(mood, c){
+  const bc = c.brow, mth = '#8a3b38';
+  let brows, eyes, mouth, extra = '';
+  if (mood === 'cold'){                                   // 冷酷（冷ややかな目）
+    brows = `<path d="M36,41 L52,46" stroke="${bc}" stroke-width="3.4" stroke-linecap="round"/><path d="M84,41 L68,46" stroke="${bc}" stroke-width="3.4" stroke-linecap="round"/>`;
+    eyes  = `<ellipse cx="47" cy="53" rx="4.6" ry="3" fill="#2b2320"/><ellipse cx="73" cy="53" rx="4.6" ry="3" fill="#2b2320"/>`;
+    mouth = `<path d="M46,73 Q60,66 74,73" stroke="${mth}" stroke-width="3.2" fill="none" stroke-linecap="round"/>`;
+    extra = `<g stroke="#ff415c" stroke-width="2.2" fill="none" stroke-linecap="round"><path d="M90,24 l6,3"/><path d="M97,21 l-3,6"/></g>`;
+  } else if (mood === 'think'){                            // 悩む
+    brows = `<path d="M36,43 Q44,39 52,41" stroke="${bc}" stroke-width="3.2" fill="none" stroke-linecap="round"/><path d="M68,38 Q76,35 84,39" stroke="${bc}" stroke-width="3.2" fill="none" stroke-linecap="round"/>`;
+    eyes  = `<g><circle cx="47" cy="53" r="5" fill="#fff" stroke="#2b2320" stroke-width="1.1"/><circle cx="45.5" cy="51.5" r="2.6" fill="#241a14"/><circle cx="73" cy="53" r="5" fill="#fff" stroke="#2b2320" stroke-width="1.1"/><circle cx="71.5" cy="51.5" r="2.6" fill="#241a14"/></g>`;
+    mouth = `<path d="M50,72 Q57,69 63,72 Q69,75 72,71" stroke="${mth}" stroke-width="2.8" fill="none" stroke-linecap="round"/>`;
+    extra = `<path d="M97,42 q4.5,7 0,10 q-4.5,-3 0,-10 Z" fill="#68c8ff" stroke="#2f9ad6" stroke-width="0.7"/>`;
+  } else {                                                 // 笑顔（よし、乗った！）
+    brows = `<path d="M36,41 Q44,37 52,40" stroke="${bc}" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M68,40 Q76,37 84,41" stroke="${bc}" stroke-width="3" fill="none" stroke-linecap="round"/>`;
+    eyes  = `<path d="M41,54 Q47,47 53,54" stroke="#2b2320" stroke-width="3.2" fill="none" stroke-linecap="round"/><path d="M67,54 Q73,47 79,54" stroke="#2b2320" stroke-width="3.2" fill="none" stroke-linecap="round"/>`;
+    mouth = `<path d="M44,67 Q60,86 76,67 Q60,74 44,67 Z" fill="${mth}"/><path d="M49,68 Q60,72 71,68 Q60,70 49,68 Z" fill="#fff"/>`;
+    extra = `<g fill="#ffd94d"><path d="M22,32 l1.8,4.4 4.4,1.8 -4.4,1.8 -1.8,4.4 -1.8,-4.4 -4.4,-1.8 4.4,-1.8Z"/><path d="M96,28 l1.5,3.6 3.6,1.5 -3.6,1.5 -1.5,3.6 -1.5,-3.6 -3.6,-1.5 3.6,-1.5Z"/></g><ellipse cx="38" cy="63" rx="5.5" ry="3.2" fill="#ff96ae" opacity=".55"/><ellipse cx="82" cy="63" rx="5.5" ry="3.2" fill="#ff96ae" opacity=".55"/>`;
+  }
+  return brows + eyes + mouth + extra;
+}
+
+/* ---- 髪（後ろ髪 / 前髪） ---- */
+function hairBack(c){
+  const H = c.hair;
+  if (c.style === 'long') return `<path d="M24,48 Q24,18 60,17 Q96,18 96,48 L94,120 Q88,108 82,112 L82,52 Q82,34 60,32 Q38,34 38,52 L38,112 Q32,108 26,120 Z" fill="${H}"/>`;
+  if (c.style === 'bob')  return `<path d="M26,50 Q26,22 60,20 Q94,22 94,50 L92,84 Q86,74 80,78 L80,54 L40,54 L40,78 Q34,74 28,84 Z" fill="${H}"/>`;
+  if (c.style === 'bun')  return `<circle cx="60" cy="15" r="12" fill="${H}"/>`;
+  return '';
+}
+function hairFront(c){
+  const H = c.hair;
+  switch(c.style){
+    case 'bald':  return `<path d="M31,52 Q27,40 37,36 Q32,46 35,54 Z" fill="${H}"/><path d="M89,52 Q93,40 83,36 Q88,46 85,54 Z" fill="${H}"/><path d="M42,33 Q60,28 78,33" stroke="${H}" stroke-width="2" fill="none" opacity=".7"/>`;
+    case 'short': return `<path d="M30,50 Q27,22 60,20 Q93,22 90,50 Q84,33 60,31 Q36,33 30,50 Z" fill="${H}"/>`;
+    case 'spiky': return `<path d="M29,49 L35,31 L41,41 L48,25 L55,39 L60,23 L65,39 L72,26 L79,41 L85,31 L91,49 Q84,32 60,30 Q36,32 29,49 Z" fill="${H}"/>`;
+    case 'long':  return `<path d="M33,45 Q30,24 60,22 Q90,24 87,45 Q79,33 60,32 Q41,33 33,45 Z" fill="${H}"/>`;
+    case 'bob':   return `<path d="M32,47 Q30,25 60,23 Q90,25 88,47 Q80,34 60,33 Q40,34 32,47 Z" fill="${H}"/>`;
+    case 'bun':   return `<path d="M31,50 Q28,27 60,25 Q92,27 89,50 Q82,34 60,33 Q38,34 31,50 Z" fill="${H}"/>`;
+    case 'tuft':  return `<path d="M53,22 Q60,10 67,22 Q60,17 53,22 Z" fill="${H}"/>`;
+  }
+  return '';
+}
+
+/* ---- 服・体 ---- */
+function body(c){
+  let s;
+  if (c.dress){
+    s  = `<path d="M20,178 L31,128 Q31,101 60,101 Q89,101 89,128 L100,178 Z" fill="${c.cloth}"/>`;
+    s += `<path d="M50,101 Q60,113 70,101" fill="none" stroke="${c.cloth2}" stroke-width="2.4"/>`;
+    s += `<path d="M34,152 Q60,164 86,152" fill="none" stroke="${c.cloth2}" stroke-width="2" opacity=".6"/>`;
+    return s;
+  }
+  s  = `<path d="M18,178 L23,126 Q28,101 60,101 Q92,101 97,126 L102,178 Z" fill="${c.cloth}"/>`;
+  s += `<path d="M50,101 Q60,114 70,101" fill="none" stroke="${c.cloth2}" stroke-width="2.4"/>`;
+  if (c.cardigan){
+    s += `<line x1="60" y1="106" x2="60" y2="178" stroke="${c.cloth2}" stroke-width="2.4"/>`;
+    s += `<g fill="${c.cloth2}"><circle cx="60" cy="120" r="2"/><circle cx="60" cy="134" r="2"/><circle cx="60" cy="148" r="2"/></g>`;
+  }
+  if (c.plaid){
+    s += `<g stroke="${c.cloth2}" stroke-width="1.4" opacity=".55"><line x1="34" y1="108" x2="30" y2="178"/><line x1="60" y1="105" x2="60" y2="178"/><line x1="86" y1="108" x2="90" y2="178"/><line x1="24" y1="132" x2="100" y2="132"/><line x1="22" y1="156" x2="102" y2="156"/></g>`;
+  }
+  if (c.stripe){
+    s += `<g stroke="${c.cloth2}" stroke-width="4" opacity=".8"><line x1="20" y1="124" x2="100" y2="124"/><line x1="19" y1="142" x2="101" y2="142"/><line x1="18" y1="160" x2="102" y2="160"/></g>`;
+  }
+  return s;
+}
+
+/* ---- 赤ちゃん（抱っこ表示用） ---- */
+function drawBaby(mood){
+  const c = CHARS.baby;
+  return `<svg class="person" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+    <path d="M16,120 Q8,84 60,82 Q112,84 104,120 Z" fill="${c.cloth}"/>
+    <ellipse cx="60" cy="52" rx="34" ry="34" fill="${c.skin}"/>
+    <path d="M52,20 Q60,7 68,20 Q60,15 52,20 Z" fill="${c.hair}"/>
+    <ellipse cx="34" cy="58" rx="6" ry="4" fill="#ffb0a0" opacity=".5"/><ellipse cx="86" cy="58" rx="6" ry="4" fill="#ffb0a0" opacity=".5"/>
+    ${faceParts(mood, c)}
+  </svg>`;
+}
+
+/* ---- 1人ぶんのキャラSVG ---- */
+function drawPerson(type, mood){
+  if (type === 'baby') return drawBaby(mood);
+  const c = CHARS[type];
+  const glasses = c.glasses
+    ? `<g fill="none" stroke="#2a2320" stroke-width="1.8"><rect x="38" y="47" width="16" height="12" rx="3"/><rect x="66" y="47" width="16" height="12" rx="3"/><line x1="54" y1="52" x2="66" y2="52"/></g>`
+    : '';
+  const nose = `<path d="M57,58 Q60,63 63,58" fill="none" stroke="#c98b63" stroke-width="1.4" stroke-linecap="round"/>`;
+  const wrinkles = c.old
+    ? `<g stroke="#c98b63" stroke-width="1" fill="none" opacity=".5"><path d="M40,63 Q45,65 50,63"/><path d="M70,63 Q75,65 80,63"/><path d="M44,45 Q48,43 52,45"/></g>`
+    : '';
+  return `<svg class="person" viewBox="0 0 120 178" xmlns="http://www.w3.org/2000/svg">
+    ${hairBack(c)}
+    ${body(c)}
+    <rect x="52" y="80" width="16" height="16" rx="4" fill="${c.skin}"/>
+    <ellipse cx="60" cy="53" rx="30" ry="33" fill="${c.skin}"/>
+    <ellipse cx="30" cy="56" rx="4.5" ry="6" fill="${c.skin}"/><ellipse cx="90" cy="56" rx="4.5" ry="6" fill="${c.skin}"/>
+    ${hairFront(c)}
+    ${nose}${wrinkles}
+    ${faceParts(mood, c)}
+    ${glasses}
+  </svg>`;
+}
+
+/* ---- 温度感 → 気分 ---- */
+function moodName(t){ return t >= 80 ? 'smile' : (t >= 40 ? 'think' : 'cold'); }
+
+/* ---- 家族グループを描画 ---- */
+function renderGroup(mood){
+  const g = $("enemyGroup");
+  if (!g || !S.party) return;
+  const n = S.party.members.length;
+  g.style.height = n <= 1 ? '42vh' : n === 2 ? '40vh' : n === 3 ? '35vh' : '30vh';
+  g.innerHTML = '';
+  S.party.members.forEach(m => {
+    const slot = document.createElement('div');
+    slot.className = 'slot';
+    slot.innerHTML = drawPerson(m.type, mood);
+    if (m.baby){
+      const b = document.createElement('div');
+      b.className = 'baby-ov';
+      b.innerHTML = drawBaby(mood);
+      slot.appendChild(b);
+    }
+    g.appendChild(slot);
+  });
+}
+
+/* ---- 赤ちゃんを抱っこさせる（親→祖父母の優先順で） ---- */
+function assignBaby(members, p){
+  if (!chance(p)) return;
+  const pref = ['mom','dad','grandma','grandpa'];
+  for (const t of pref){
+    const h = members.find(m => m.type === t && !m.baby);
+    if (h){ h.baby = true; return; }
+  }
+}
+
+/* ---- 構成をランダム生成（子供だけ・単独の子供は出さない） ---- */
+function randomComposition(){
+  const roll = rnd();
+  if (roll < 0.22) return [{type: pick(['dad','mom','grandpa','grandma'])}];       // 単独の大人
+  if (roll < 0.38) return [{type:'dad'}, {type:'mom'}];                            // 若い夫婦
+  if (roll < 0.50) return [{type:'grandpa'}, {type:'grandma'}];                    // ご年配夫婦
+  if (roll < 0.72){                                                                // 若いご家族（親＋子）
+    const ad = shuffle(['dad','mom']).slice(0, chance(0.6) ? 2 : 1);
+    const kd = shuffle(['son','daughter']).slice(0, chance(0.5) ? 2 : 1);
+    return ad.concat(kd).map(t => ({type:t}));
+  }
+  if (roll < 0.86) return [{type: pick(['dad','mom'])}, {type: pick(['son','daughter'])}]; // 親子
+  const arr = [pick(['grandpa','grandma']), pick(['dad','mom'])];                  // 3世代
+  if (chance(0.6)) arr.push(pick(['son','daughter']));
+  return arr.map(t => ({type:t}));
+}
+
+function genParty(rule){
+  let members;
+  if (rule === 'soloYoung'){
+    members = [{type:'youngman'}];                       // 単独の若い男性（塩対応）
+  } else if (rule === 'youngFamily'){                    // 母を必ず含む若い層（会話整合のため）
+    if (chance(0.5)){
+      members = [{type:'dad'}, {type:'mom'}];
+    } else {
+      const kd = shuffle(['son','daughter']).slice(0, chance(0.5) ? 2 : 1).map(t => ({type:t}));
+      members = [{type:'dad'}, {type:'mom'}].concat(kd);
+    }
+    assignBaby(members, 0.55);
+  } else {                                               // 'any' 完全ランダム
+    members = randomComposition();
+    assignBaby(members, 0.30);
+  }
+  return { members, crowd: labelParty(members) };
+}
+
+function labelParty(members){
+  const has = (t) => members.some(m => m.type === t);
+  const cnt = members.length;
+  const hasGP = has('grandpa') || has('grandma');
+  const hasPar = has('dad') || has('mom');
+  const hasChild = has('son') || has('daughter');
+  const baby = members.some(m => m.baby);
+  let label;
+  if (has('youngman'))                                  label = '単身（若い男性）';
+  else if (hasGP && hasPar && hasChild)                 label = '3世代ご家族';
+  else if (hasChild && cnt >= 3)                        label = 'ご家族';
+  else if (hasChild)                                    label = '親子';
+  else if (cnt === 2 && has('dad') && has('mom'))       label = 'ご夫婦（若い）';
+  else if (cnt === 2 && has('grandpa') && has('grandma')) label = 'ご夫婦（ご年配）';
+  else if (cnt === 1)                                   label = '単身';
+  else                                                  label = 'ご家族';
+  const ages = [...new Set(members.map(m => TYPE_INFO[m.type].age))].join('・');
+  return `客層：${label}${baby ? '＋赤ちゃん(抱っこ)' : ''} ｜ ${cnt}人${baby ? '＋乳児' : ''}来場（${ages}）`;
+}
+
 /* ======================= ゲーム状態 ======================= */
 const S = {
   stageIndex: 0,
@@ -540,6 +775,7 @@ const S = {
   hp: 100,
   maxHp: 100,
   locked: false,
+  party: null,                    // 現在の客層（家族構成）
   cleared: [true, false, false] // stage1のみ最初から解放
 };
 
@@ -586,8 +822,9 @@ function startStage(i){
   S.hp = S.maxHp;
   S.locked = false;
   const st = STAGES[i];
+  S.party = genParty(st.partyRule);                       // 客層をランダム生成
   $("enemyName").innerHTML = `${st.enemy} <span class="tag">Lv.${st.id}</span>`;
-  $("enemySub").textContent = st.sub;
+  $("enemySub").textContent = `${S.party.crowd} ｜ ${st.trait}`;
   buildProgress();
   renderStats(false);
   renderQuestion();
@@ -632,8 +869,8 @@ function renderStats(animate){
   $("hpFill").style.background = hp <= 30
     ? "linear-gradient(90deg,#7a1e1e,var(--hp-low))"
     : "linear-gradient(90deg,#1e7a4a,var(--hp))";
-  // 顔・気分
-  $("enemyFace").textContent = faceFor(t);
+  // 家族グラフィック・気分
+  renderGroup(moodName(t));
   $("moodRing").style.background = moodColor(t);
 }
 
@@ -745,7 +982,7 @@ function spawnFloats(choice, ev){
   }
 }
 function hitEnemy(){
-  const e = $("enemyFace");
+  const e = $("enemyGroup");
   e.classList.remove("hit"); void e.offsetWidth; e.classList.add("hit");
 }
 function screenFlash(type){
